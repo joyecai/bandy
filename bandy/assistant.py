@@ -127,8 +127,8 @@ class VoiceAssistant:
         pre_n = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.PRE_SPEECH_BUF)
         min_sp = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.MIN_SPEECH_DUR)
         max_ch = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.MAX_RECORD_SEC)
-        barge_thr = thr * 12.0
-        barge_need = 12
+        barge_thr = thr * 4.0
+        barge_need = 6
 
         ring = []
         s = {"frames": [], "started": False, "silence": 0, "speech_chunks": 0, "total_chunks": 0}
@@ -141,28 +141,34 @@ class VoiceAssistant:
                 time.sleep(0.01)
                 continue
 
-            if self._is_speaking or (time.time() - self._speak_end_time) < cfg.SPEAK_COOLDOWN:
-                if self._is_speaking:
-                    audio = np.frombuffer(data, np.int16).astype(np.float32)
-                    rms = np.sqrt(np.mean(audio ** 2))
-                    if rms > barge_thr:
-                        barge_cnt += 1
-                        if barge_cnt >= barge_need and self._playback_proc:
-                            try:
-                                self._playback_proc.terminate()
-                            except Exception:
-                                pass
-                            self._barge_in = True
-                            barge_cnt = 0
-                    else:
+            audio = np.frombuffer(data, np.int16).astype(np.float32)
+            rms = np.sqrt(np.mean(audio ** 2))
+
+            if self._is_speaking:
+                if rms > barge_thr:
+                    barge_cnt += 1
+                    if barge_cnt >= barge_need and self._playback_proc:
+                        try:
+                            self._playback_proc.terminate()
+                        except Exception:
+                            pass
+                        self._barge_in = True
+                        self._is_speaking = False
+                        self._speak_end_time = 0
                         barge_cnt = 0
+                        print("🔇 用户打断播放", flush=True)
+                        # fall through to normal VAD
+                    else:
+                        continue
+                else:
+                    barge_cnt = 0
+                    continue
+
+            if (time.time() - self._speak_end_time) < cfg.SPEAK_COOLDOWN:
                 if s["started"]:
                     self._reset_vad(s)
                 ring.clear()
                 continue
-
-            audio = np.frombuffer(data, np.int16).astype(np.float32)
-            rms = np.sqrt(np.mean(audio ** 2))
 
             if not s["started"]:
                 ring.append(data)
@@ -328,6 +334,11 @@ class VoiceAssistant:
             from .dashboard import start_dashboard
             self._dashboard_runner = await start_dashboard()
 
+        self._tg_bot_task = None
+        if cfg.TG_BOT_TOKEN and cfg.TG_BOT_ENABLED:
+            from .tg_bot import run_tg_bot
+            self._tg_bot_task = asyncio.create_task(run_tg_bot(self))
+
         threading.Thread(target=self._capture_loop, daemon=True).start()
 
         print("=" * 50)
@@ -359,6 +370,12 @@ class VoiceAssistant:
                     print(f"❌ 错误: {e}", flush=True)
                     await asyncio.sleep(0.5)
         finally:
+            if self._tg_bot_task and not self._tg_bot_task.done():
+                self._tg_bot_task.cancel()
+                try:
+                    await self._tg_bot_task
+                except (asyncio.CancelledError, Exception):
+                    pass
             if self._dashboard_runner:
                 await self._dashboard_runner.cleanup()
             if self._aio_session and not self._aio_session.closed:

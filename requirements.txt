@@ -6,3 +6,4 @@ PyAudio
 aiohttp
 requests
 PyYAML
+soundfile

@@ -6,6 +6,7 @@ api:
 telegram:
   bot_token: "your-telegram-bot-token"
   chat_id: "your-chat-id"
+  bot_enabled: true
 
 audio:
   sample_rate: 16000

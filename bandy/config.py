@@ -20,6 +20,7 @@ class _Cfg:
         tg = data.get("telegram", {})
         self.TG_BOT_TOKEN = tg.get("bot_token", "")
         self.TG_CHAT_ID = tg.get("chat_id", "")
+        self.TG_BOT_ENABLED = tg.get("bot_enabled", True)
 
         au = data.get("audio", {})
         self.SAMPLE_RATE = au.get("sample_rate", 16000)

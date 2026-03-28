@@ -149,7 +149,8 @@ async def process_command(assistant, text):
         return await assistant._reply(strip_markdown(result))
 
     # -- 其他指令 --
-    if "天气" in text or any(w in low for w in ["weather", "forecast", "temperature"]):
+    _weather_kw = ("天气", "气温", "温度", "预报", "几度", "多少度", "冷不冷", "热不热")
+    if any(w in text for w in _weather_kw) or any(w in low for w in ["weather", "forecast", "temperature"]):
         city, off, disp, dz = parse_weather_query(text)
         resp = await asyncio.to_thread(get_weather, city, off, disp, dz)
     elif "退出" in text or "结束" in text:

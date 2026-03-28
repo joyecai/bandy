@@ -82,12 +82,16 @@ async def call_streaming(assistant, prompt):
                     assistant._playback_proc = None
                     assistant._is_speaking = False
                     import time
-                    assistant._speak_end_time = time.time()
+                    bargein = assistant._barge_in
+                    if bargein:
+                        assistant._speak_end_time = 0
+                    else:
+                        assistant._speak_end_time = time.time()
                     try:
                         os.remove(path)
                     except OSError:
                         pass
-                    if assistant._barge_in:
+                    if bargein:
                         assistant._barge_in = False
                         aborted = True
                         break

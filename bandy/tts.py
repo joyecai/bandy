@@ -59,4 +59,7 @@ async def play(path, state):
     state._playback_proc = None
     state._is_speaking = False
     import time
-    state._speak_end_time = time.time()
+    if state._barge_in:
+        state._speak_end_time = 0
+    else:
+        state._speak_end_time = time.time()
