@@ -142,7 +142,9 @@ async def _process_tg_text(assistant, text):
         return await asyncio.to_thread(get_weather, city, off, disp, dz)
 
     if needs_agent(text):
-        await send_tg_message("⏳ Bandy 正在处理...")
+        from .agent import estimate_seconds, format_eta
+        est_s = estimate_seconds(text, assistant._task_history)
+        await send_tg_message(f"⏳ Bandy 正在处理，预计{format_eta(est_s)}完成")
         asyncio.create_task(_run_agent_and_reply(assistant, text))
         return None
 

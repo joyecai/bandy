@@ -127,8 +127,8 @@ class VoiceAssistant:
         pre_n = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.PRE_SPEECH_BUF)
         min_sp = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.MIN_SPEECH_DUR)
         max_ch = int(cfg.SAMPLE_RATE / cfg.CHUNK * cfg.MAX_RECORD_SEC)
-        barge_thr = thr * 4.0
-        barge_need = 6
+        barge_thr = max(thr * 10.0, 1000)
+        barge_need = 9
 
         ring = []
         s = {"frames": [], "started": False, "silence": 0, "speech_chunks": 0, "total_chunks": 0}
@@ -154,10 +154,10 @@ class VoiceAssistant:
                             pass
                         self._barge_in = True
                         self._is_speaking = False
-                        self._speak_end_time = 0
+                        self._speak_end_time = time.time() - cfg.SPEAK_COOLDOWN + 0.2
                         barge_cnt = 0
                         print("🔇 用户打断播放", flush=True)
-                        # fall through to normal VAD
+                        # short 200ms cooldown then resume VAD
                     else:
                         continue
                 else:
@@ -220,6 +220,12 @@ class VoiceAssistant:
                 else:
                     path = await tts_mod.synthesize(text)
                 await tts_mod.play(path, self)
+                # flush echo: discard mic audio captured during TTS playback
+                while not self._speech_queue.empty():
+                    try:
+                        self._speech_queue.get_nowait()
+                    except queue.Empty:
+                        break
                 if self._barge_in:
                     self._barge_in = False
                 if not cached:
@@ -346,7 +352,7 @@ class VoiceAssistant:
         print("   说 'Bandy' 唤醒 | 说话可打断播放")
         print("=" * 50, flush=True)
 
-        await self.speak("Bandy已就绪")
+        await self.speak("语音助手已就绪")
 
         try:
             while self.running:

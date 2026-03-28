@@ -17,6 +17,9 @@ async def send_tg_message(text):
         return False
 
 
+_TG_EXT_REMAP = {'.md': '.txt'}
+
+
 async def send_tg_file(file_path, caption=""):
     import aiohttp
     url = f"https://api.telegram.org/bot{cfg.TG_BOT_TOKEN}/sendDocument"
@@ -24,10 +27,13 @@ async def send_tg_file(file_path, caption=""):
         print(f"⚠️ 文件不存在: {file_path}", flush=True)
         return False
     try:
+        fname = os.path.basename(file_path)
+        base, ext = os.path.splitext(fname)
+        if ext.lower() in _TG_EXT_REMAP:
+            fname = base + _TG_EXT_REMAP[ext.lower()]
         data = aiohttp.FormData()
         data.add_field("chat_id", cfg.TG_CHAT_ID)
-        data.add_field("document", open(file_path, "rb"),
-                       filename=os.path.basename(file_path))
+        data.add_field("document", open(file_path, "rb"), filename=fname)
         if caption:
             data.add_field("caption", caption)
         async with aiohttp.ClientSession() as s:

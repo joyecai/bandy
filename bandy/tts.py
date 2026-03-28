@@ -60,6 +60,7 @@ async def play(path, state):
     state._is_speaking = False
     import time
     if state._barge_in:
-        state._speak_end_time = 0
+        from .config import cfg as _cfg
+        state._speak_end_time = time.time() - _cfg.SPEAK_COOLDOWN + 0.2
     else:
         state._speak_end_time = time.time()

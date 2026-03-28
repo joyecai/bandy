@@ -68,7 +68,7 @@ async def call_streaming(assistant, prompt):
                     break
                 try:
                     path = await item
-                except Exception:
+                except (Exception, asyncio.CancelledError):
                     continue
                 import subprocess
                 async with assistant._speak_lock:
@@ -82,15 +82,23 @@ async def call_streaming(assistant, prompt):
                     assistant._playback_proc = None
                     assistant._is_speaking = False
                     import time
+                    import time
                     bargein = assistant._barge_in
                     if bargein:
-                        assistant._speak_end_time = 0
+                        assistant._speak_end_time = time.time() - cfg.SPEAK_COOLDOWN + 0.2
                     else:
                         assistant._speak_end_time = time.time()
                     try:
                         os.remove(path)
                     except OSError:
                         pass
+                    # flush echo from mic
+                    import queue as _q
+                    while not assistant._speech_queue.empty():
+                        try:
+                            assistant._speech_queue.get_nowait()
+                        except _q.Empty:
+                            break
                     if bargein:
                         assistant._barge_in = False
                         aborted = True
@@ -158,14 +166,14 @@ async def call_streaming(assistant, prompt):
         for t in synth_tasks:
             if not t.done():
                 t.cancel()
-                try:
-                    p = await t
-                    os.remove(p)
-                except Exception:
-                    pass
+            try:
+                p = await t
+                os.remove(p)
+            except (Exception, asyncio.CancelledError):
+                pass
 
         return strip_markdown(full) if full else "抱歉，没有收到回复"
-    except Exception as e:
+    except (Exception, asyncio.CancelledError) as e:
         print(f"⚠️ API 错误: {e}", flush=True)
         return "抱歉，网络出了点问题，请再说一次"
 

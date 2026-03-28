@@ -27,17 +27,19 @@ AGENT_KW_WEAK = [
 ]
 
 def _agent_preamble():
+    out_dir = _today_output_dir()
     return (
-        f"用户 Telegram chat_id: {cfg.TG_CHAT_ID}。"
-        "重要: 不要自行发送文件到Telegram，只需将文件保存到本地即可，系统会自动发送。"
+        f"用户 Telegram chat_id: {cfg.TG_CHAT_ID}。\n"
+        f"所有生成的文件必须保存到: {out_dir}\n"
+        "重要: 不要自行发送文件到Telegram，只需将文件保存到本地即可，系统会自动发送。\n"
         "如果任务需要发送文本消息到Telegram，可以直接使用该ID。"
     )
 
 _FILE_RE = re.compile(
-    r'(?:~/|/Users/)[\w./\-]+\.(?:csv|xlsx?|pdf|txt|json|png|jpg|doc|docx|zip)')
+    r'(?:~/|/Users/)[\w./\-]+\.(?:csv|xlsx?|pdf|txt|json|png|jpg|doc|docx|zip|md)')
 _OUTPUT_EXTS = (
     '.csv', '.xlsx', '.xls', '.pdf', '.txt', '.json',
-    '.png', '.jpg', '.doc', '.docx', '.zip')
+    '.png', '.jpg', '.doc', '.docx', '.zip', '.md')
 
 
 def needs_agent(text):
@@ -47,20 +49,86 @@ def needs_agent(text):
     return sum(1 for kw in AGENT_KW_WEAK if kw in low) >= 2
 
 
-def estimate_minutes(task, task_history):
-    low = task.lower()
+_TASK_CATEGORIES = {
+    "search":  (["查", "搜索", "搜一下", "查询", "查找", "查一下", "查一查"], 15),
+    "send":    (["发送", "发到", "发给", "转发", "telegram", "tg", "邮件"], 20),
+    "file":    (["文件", "文档", "excel", "pdf", "csv", "表格"], 40),
+    "create":  (["创建", "生成", "制作", "写一个", "写个"], 30),
+    "analyze": (["整理", "汇总", "分析", "总结", "对比", "比较"], 45),
+    "translate": (["翻译"], 20),
+    "collect": (["收集", "下载", "最新", "新闻", "价格", "股票", "行情"], 25),
+}
+
+
+def _task_kws(text):
+    low = text.lower()
     all_kw = AGENT_KW_STRONG | set(AGENT_KW_WEAK)
-    kws = {kw for kw in all_kw if kw in low}
-    for hist_kws, dur in reversed(task_history):
-        if kws & hist_kws:
-            return max(1, round(dur / 60))
-    if any(k in low for k in ["翻译", "查", "搜索", "查询", "查找", "查一下"]):
-        return 1
-    if any(k in low for k in ["发送", "发到", "telegram", "tg", "邮件"]):
-        return 3
-    if any(k in low for k in ["文件", "excel", "pdf", "表格", "整理"]):
-        return 3
-    return 2
+    return {kw for kw in all_kw if kw in low}
+
+
+def _task_category(text):
+    low = text.lower()
+    for cat, (kws, _) in _TASK_CATEGORIES.items():
+        if any(k in low for k in kws):
+            return cat
+    return "general"
+
+
+def estimate_seconds(task, task_history):
+    """基于历史加权匹配 + 分类回退，返回预估秒数."""
+    kws = _task_kws(task)
+    cat = _task_category(task)
+
+    # 1) weighted match against history (recent entries weigh more)
+    candidates = []
+    for i, (h_text, h_kws, h_cat, h_dur) in enumerate(task_history):
+        if not kws or not h_kws:
+            continue
+        overlap = len(kws & h_kws)
+        union = len(kws | h_kws)
+        sim = overlap / union
+        if h_cat == cat:
+            sim += 0.3
+        recency = 0.7 + 0.3 * (i / max(len(task_history), 1))
+        score = sim * recency
+        if score > 0.2:
+            candidates.append((score, h_dur))
+
+    if candidates:
+        candidates.sort(key=lambda x: -x[0])
+        total_w, total_d = 0.0, 0.0
+        for w, d in candidates[:5]:
+            total_w += w
+            total_d += w * d
+        return max(5, round(total_d / total_w))
+
+    # 2) average of same category in history
+    cat_durs = [h_dur for (_, _, h_cat, h_dur) in task_history if h_cat == cat]
+    if cat_durs:
+        return max(5, round(sum(cat_durs) / len(cat_durs)))
+
+    # 3) category default
+    for c, (_, default_s) in _TASK_CATEGORIES.items():
+        if c == cat:
+            return default_s
+
+    return 20
+
+
+def format_eta(seconds):
+    """将秒数格式化为可读字符串."""
+    if seconds < 60:
+        return f"{seconds}秒"
+    m = seconds / 60
+    if m < 1.5:
+        return "1分钟"
+    return f"{m:.1f}分钟"
+
+
+def estimate_minutes(task, task_history):
+    """兼容旧接口，返回分钟数（向上取整）."""
+    s = estimate_seconds(task, task_history)
+    return max(1, -(-s // 60))
 
 
 def _today_output_dir():
@@ -79,16 +147,17 @@ async def call_openclaw(assistant, task):
         parts.append(ctx)
     parts.append(f"当前任务: {task}")
     full_msg = "\n\n".join(parts)
-    low = task.lower()
-    all_kw = AGENT_KW_STRONG | set(AGENT_KW_WEAK)
-    kws = {kw for kw in all_kw if kw in low}
+    kws = _task_kws(task)
+    cat = _task_category(task)
 
-    est = estimate_minutes(task, assistant._task_history)
-    announce = f"Bandy正在处理，预计{est}分钟完成"
+    est_s = estimate_seconds(task, assistant._task_history)
+    eta_str = format_eta(est_s)
+    announce = f"Bandy正在处理，预计{eta_str}完成"
     print(f"🤖 {announce}", flush=True)
     assistant._announce(announce)
 
     start = time.time()
+    update_interval = min(max(est_s, 30), 120)
     try:
         proc = await asyncio.create_subprocess_exec(
             "openclaw", "agent", "--agent", "main",
@@ -98,30 +167,33 @@ async def call_openclaw(assistant, task):
         comm_task = asyncio.create_task(proc.communicate())
         last_update = start
         while True:
-            done, _ = await asyncio.wait({comm_task}, timeout=30)
+            done, _ = await asyncio.wait({comm_task}, timeout=15)
             if done:
                 break
             now = time.time()
-            if now - last_update >= 300:
-                elapsed_m = int((now - start) / 60)
-                remain = max(1, est - elapsed_m)
-                msg = f"Bandy还在处理中，已经{elapsed_m}分钟了，预计还需{remain}分钟"
+            elapsed = now - start
+            if elapsed > est_s * 1.2 and now - last_update >= update_interval:
+                remain_s = max(5, est_s - int(elapsed))
+                if remain_s < 0:
+                    msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}了，快好了"
+                else:
+                    msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}，预计还需{format_eta(remain_s)}"
                 print(f"🤖 {msg}", flush=True)
                 assistant._announce(msg)
                 last_update = now
-            if now - start > 600:
+            if elapsed > 600:
                 try:
                     proc.kill()
                 except Exception:
                     pass
-                assistant._task_history.append((kws, now - start))
+                assistant._task_history.append((task, kws, cat, elapsed))
                 return "任务超时了，Bandy会在后台继续处理"
 
         stdout, stderr = comm_task.result()
         duration = time.time() - start
-        assistant._task_history.append((kws, duration))
-        if len(assistant._task_history) > 50:
-            assistant._task_history = assistant._task_history[-50:]
+        assistant._task_history.append((task, kws, cat, duration))
+        if len(assistant._task_history) > 100:
+            assistant._task_history = assistant._task_history[-100:]
 
         if proc.returncode == 0 and stdout:
             try:
@@ -146,31 +218,71 @@ async def call_openclaw(assistant, task):
         return "执行出错了，请再试一次"
 
 
+def _collect_new_files_to_output(start_time):
+    """将 workspace 根目录新生成的文件移到 output/日期/ 目录."""
+    out_dir = _today_output_dir()
+    moved = []
+    try:
+        for fname in os.listdir(cfg.PROJECT_ROOT):
+            if not fname.endswith(_OUTPUT_EXTS):
+                continue
+            fpath = os.path.join(cfg.PROJECT_ROOT, fname)
+            if not os.path.isfile(fpath):
+                continue
+            if os.path.getmtime(fpath) < start_time:
+                continue
+            dest = os.path.join(out_dir, fname)
+            if os.path.exists(dest):
+                base, ext = os.path.splitext(fname)
+                dest = os.path.join(out_dir, f"{base}_{int(time.time())}{ext}")
+            try:
+                os.rename(fpath, dest)
+                moved.append(dest)
+                print(f"📁 已移动到输出目录: {fname}", flush=True)
+            except OSError:
+                import shutil
+                shutil.move(fpath, dest)
+                moved.append(dest)
+                print(f"📁 已移动到输出目录: {fname}", flush=True)
+    except Exception as e:
+        print(f"⚠️ 文件整理失败: {e}", flush=True)
+    return moved
+
+
 async def auto_send_tg(assistant, reply, start_time):
     """自动检测并发送 agent 生成的文件到 TG, 跨任务去重."""
-    sent_this_call = set()
-    for f in _FILE_RE.findall(reply):
-        path = os.path.expanduser(f)
-        if os.path.isfile(path) and path not in assistant._tg_sent_files:
-            ok = await send_tg_file(path, caption=os.path.basename(path))
-            if ok:
-                print(f"📤 已发送到 TG: {path}", flush=True)
-                assistant._tg_sent_files.add(path)
-                sent_this_call.add(path)
+    moved_files = _collect_new_files_to_output(start_time)
 
-    for scan_dir in [cfg.output_path, cfg.PROJECT_ROOT]:
+    sent_this_call = set()
+
+    async def _send(fpath):
+        if fpath in assistant._tg_sent_files or fpath in sent_this_call:
+            return
+        if not os.path.isfile(fpath):
+            return
+        ok = await send_tg_file(fpath, caption=os.path.basename(fpath))
+        if ok:
+            print(f"📤 已发送到 TG: {fpath}", flush=True)
+            assistant._tg_sent_files.add(fpath)
+            sent_this_call.add(fpath)
+
+    for f in _FILE_RE.findall(reply):
+        await _send(os.path.expanduser(f))
+
+    for d in {_today_output_dir(), cfg.output_path}:
         try:
-            for fname in os.listdir(scan_dir):
-                if fname.endswith(_OUTPUT_EXTS):
-                    fpath = os.path.join(scan_dir, fname)
-                    if os.path.getmtime(fpath) >= start_time and fpath not in assistant._tg_sent_files:
-                        ok = await send_tg_file(fpath, caption=fname)
-                        if ok:
-                            print(f"📤 已发送到 TG: {fpath}", flush=True)
-                            assistant._tg_sent_files.add(fpath)
-                            sent_this_call.add(fpath)
+            for fname in os.listdir(d):
+                if not fname.endswith(_OUTPUT_EXTS):
+                    continue
+                fpath = os.path.join(d, fname)
+                if os.path.isfile(fpath) and os.path.getmtime(fpath) >= start_time:
+                    await _send(fpath)
         except Exception:
             pass
+
+    for fpath in moved_files:
+        await _send(fpath)
+
     return bool(sent_this_call)
 
 

@@ -199,6 +199,8 @@ class MetricsStore:
                 "sessions": [self._session_dict(s) for s in self.sessions[-50:]],
                 "recent_stt": [self._stt_dict(m) for m in self.stt_history[-10:]],
                 "recent_llm": [self._llm_dict(m) for m in self.llm_history[-10:]],
+                "recent_tts": [self._tts_dict(m) for m in self.tts_history[-10:]],
+                "recent_vision": [self._vision_dict(m) for m in self.vision_history[-10:]],
             }
 
     @staticmethod
@@ -238,6 +240,21 @@ class MetricsStore:
             "tps": round(m.tokens_per_sec, 1),
             "ttft": round(m.time_to_first_token, 3),
             "total": round(m.total_time, 2), "ts": m.timestamp,
+        }
+
+    @staticmethod
+    def _tts_dict(m: TtsMetric):
+        return {
+            "text": m.text[:40], "chars": m.char_count,
+            "synth_time": round(m.synth_time, 3),
+            "cps": round(m.chars_per_sec, 1), "ts": m.timestamp,
+        }
+
+    @staticmethod
+    def _vision_dict(m: VisionMetric):
+        return {
+            "prompt": m.prompt[:40], "result": m.result[:60],
+            "proc_time": round(m.process_time, 2), "ts": m.timestamp,
         }
 
 
