@@ -7,8 +7,15 @@ logs/
 __pycache__/
 *.pyc
 
-# OpenClaw 运行时状态
+# OpenClaw 运行时状态和模板文件
 .openclaw/
+AGENTS.md
+BOOTSTRAP.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
 
 # macOS
 .DS_Store
