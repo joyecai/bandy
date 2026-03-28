@@ -9,7 +9,7 @@ import time as _time
 import edge_tts
 
 from .config import cfg
-from .utils import detect_lang, strip_markdown
+from .utils import detect_lang, strip_markdown, to_simplified
 from .metrics import store, LlmMetric, TtsMetric
 
 SYS_ZH = (
@@ -135,6 +135,8 @@ async def call_streaming(assistant, prompt):
                 full += token
                 if _SENT_BREAK.search(buf) and len(buf) >= 4:
                     sentence = strip_markdown(buf.strip())
+                    if detect_lang(sentence) == 'zh':
+                        sentence = to_simplified(sentence)
                     buf = ""
                     if sentence and not aborted:
                         t = asyncio.create_task(_synth(sentence))
@@ -146,6 +148,8 @@ async def call_streaming(assistant, prompt):
 
         if buf.strip() and not aborted:
             sentence = strip_markdown(buf.strip())
+            if detect_lang(sentence) == 'zh':
+                sentence = to_simplified(sentence)
             if sentence:
                 t = asyncio.create_task(_synth(sentence))
                 synth_tasks.append(t)
@@ -194,7 +198,10 @@ async def call_api(assistant, prompt):
             timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
             data = await resp.json()
-            return strip_markdown(data['choices'][0]['message']['content'])
+            text = strip_markdown(data['choices'][0]['message']['content'])
+            if detect_lang(text) == 'zh':
+                text = to_simplified(text)
+            return text
     except Exception as e:
         print(f"⚠️ API 错误: {e}", flush=True)
         return "抱歉，网络出了点问题，请再说一次"

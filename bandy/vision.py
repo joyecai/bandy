@@ -6,6 +6,7 @@ import time as _time
 
 from .config import cfg
 from .metrics import store, VisionMetric
+from .utils import to_simplified, detect_lang
 
 _VISION_KW_STRONG = [
     "看看", "看一下", "看下", "拍一下", "拍照", "辨认",
@@ -66,6 +67,8 @@ def vision_query(image_path, prompt="用简洁中文描述你看到了什么", h
         }, timeout=60)
         data = resp.json()
         result = data.get("message", {}).get("content", "识别失败")
+        if detect_lang(result) == 'zh':
+            result = to_simplified(result)
         store.record_vision(VisionMetric(
             prompt=prompt, result=result, process_time=_time.time() - t0))
         return result
