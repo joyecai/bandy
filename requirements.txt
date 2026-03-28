@@ -1,0 +1,8 @@
+faster-whisper
+edge-tts
+numpy
+scipy
+PyAudio
+aiohttp
+requests
+PyYAML

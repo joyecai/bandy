@@ -1,0 +1,63 @@
+api:
+  url: "http://your-llm-api/v1/chat/completions"
+  key: "your-api-key"
+  model: "your-model-name"
+
+telegram:
+  bot_token: "your-telegram-bot-token"
+  chat_id: "your-chat-id"
+
+audio:
+  sample_rate: 16000
+  chunk: 480
+  channels: 1
+  input_device_idx: 1
+  silence_after: 0.8
+  pre_speech_buf: 0.3
+  min_speech_dur: 0.3
+  max_record_sec: 10
+  noise_cal_sec: 1.0
+  speak_cooldown: 0.5
+  playback_speed: 1.1
+
+whisper:
+  model: "small"
+  device: "auto"
+  compute_type: "int8"
+
+vision:
+  model: "minicpm-v"
+  ollama_url: "http://localhost:11434"
+  imagesnap: "/opt/homebrew/bin/imagesnap"
+  context_ttl: 60
+
+camera:
+  link_ctl: "/opt/homebrew/bin/link-ctl"
+  app_name: "Insta360 Link Controller"
+  nod_amplitude: 50
+
+conversation:
+  ttl: 120
+  history_ttl: 10800
+  history_max: 50
+
+proxy:
+  http: "http://127.0.0.1:7890"
+  https: "http://127.0.0.1:7890"
+
+paths:
+  extra:
+    - "/opt/homebrew/bin"
+
+output:
+  dir: "output"
+  retention_days: 90
+
+wake_word:
+  agent: "龙虾"
+
+dashboard:
+  port: 8765
+  enabled: true
+
+location_override: ""
