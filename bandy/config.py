@@ -12,6 +12,7 @@ def _load():
 
 class _Cfg:
     def __init__(self, data: dict):
+        self._raw = data
         api = data.get("api", {})
         self.API_URL = api.get("url", "")
         self.API_KEY = api.get("key", "")
@@ -41,7 +42,8 @@ class _Cfg:
         self.WHISPER_COMPUTE = wh.get("compute_type", "int8")
 
         vi = data.get("vision", {})
-        self.VISION_MODEL = vi.get("model", "minicpm-v")
+        self.VISION_MODEL = vi.get("model", "mlx-community/Qwen2.5-VL-3B-Instruct-4bit")
+        self.VISION_PRELOAD = vi.get("preload", False)
         self.OLLAMA_URL = vi.get("ollama_url", "http://localhost:11434")
         self.IMAGESNAP = vi.get("imagesnap", "/opt/homebrew/bin/imagesnap")
         self.VISION_CONTEXT_TTL = vi.get("context_ttl", 60)

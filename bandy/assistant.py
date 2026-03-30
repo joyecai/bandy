@@ -87,6 +87,10 @@ class VoiceAssistant:
         self._calibrate_noise()
         await tts_mod.warm_tts(self._tts_cache)
         stt_mod.warm_whisper(self.whisper_model)
+        from . import vision as vision_mod
+        vision_mod.preload()
+        from .llm import warmup_context
+        warmup_context()
         print("✅ 已就绪\n", flush=True)
 
     def _calibrate_noise(self):
@@ -327,9 +331,12 @@ class VoiceAssistant:
     async def run(self):
         self._speak_lock = asyncio.Lock()
         self._announce_queue = asyncio.Queue()
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, self._shutdown)
+        try:
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, self._shutdown)
+        except (ValueError, RuntimeError):
+            pass
 
         await self.load_all()
 
@@ -345,14 +352,14 @@ class VoiceAssistant:
             from .tg_bot import run_tg_bot
             self._tg_bot_task = asyncio.create_task(run_tg_bot(self))
 
-        threading.Thread(target=self._capture_loop, daemon=True).start()
-
         print("=" * 50)
         print("🎙️ 语音助手已就绪 (全双工)")
         print("   说 'Bandy' 唤醒 | 说话可打断播放")
         print("=" * 50, flush=True)
 
         await self.speak("语音助手已就绪")
+
+        threading.Thread(target=self._capture_loop, daemon=True).start()
 
         try:
             while self.running:

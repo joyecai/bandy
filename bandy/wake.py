@@ -17,7 +17,7 @@ def is_wake_word(text):
             return True
     for w in re.split(r'[\s,!?，。！？]+', text.lower()):
         c = re.sub(r'[^a-z]', '', w)
-        if len(c) >= 3 and difflib.SequenceMatcher(None, c, "bandy").ratio() >= 0.6:
+        if len(c) >= 4 and difflib.SequenceMatcher(None, c, "bandy").ratio() >= 0.7:
             return True
     return False
 

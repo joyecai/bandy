@@ -4,6 +4,11 @@ config.yaml
 # 运行时生成
 output/
 logs/
+tmp/
+transcript.txt
+dashboard_state.json
+.bandy.pid
+
 __pycache__/
 *.pyc
 
@@ -16,6 +21,10 @@ IDENTITY.md
 SOUL.md
 TOOLS.md
 USER.md
+
+# IDE / 编辑器
+.cursor/
+.vscode/
 
 # macOS
 .DS_Store

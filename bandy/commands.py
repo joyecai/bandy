@@ -41,19 +41,24 @@ async def process_command(assistant, text):
         return
 
     if is_wake_word(text):
-        assistant.conversation_mode = True
-        assistant.last_command_time = now
-        store.new_session()
-        remainder = strip_wake_word(text)
-        speak_task = asyncio.create_task(assistant._reply("在"))
-        if not assistant.ai_tracking_active:
-            assistant.ai_tracking_active = True
-            asyncio.create_task(assistant._start_tracking())
-        await speak_task
-        if not remainder:
-            return
-        text = remainder
-        in_conv = True
+        if in_conv:
+            text = strip_wake_word(text)
+            if not text:
+                return
+        else:
+            assistant.conversation_mode = True
+            assistant.last_command_time = now
+            store.new_session()
+            remainder = strip_wake_word(text)
+            speak_task = asyncio.create_task(assistant._reply("在"))
+            if not assistant.ai_tracking_active:
+                assistant.ai_tracking_active = True
+                asyncio.create_task(assistant._start_tracking())
+            await speak_task
+            if not remainder:
+                return
+            text = remainder
+            in_conv = True
 
     if not in_conv:
         return
