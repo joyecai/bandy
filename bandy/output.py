@@ -6,13 +6,6 @@ import datetime as dt
 from .config import cfg
 
 
-def today_dir():
-    """返回今天的输出子目录, 自动创建."""
-    d = os.path.join(cfg.output_path, dt.date.today().isoformat())
-    os.makedirs(d, exist_ok=True)
-    return d
-
-
 def cleanup_old_output():
     """删除超出 retention_days 的日期子目录."""
     base = cfg.output_path

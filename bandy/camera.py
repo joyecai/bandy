@@ -78,10 +78,6 @@ def camera_center():
     _link("center")
 
 
-def camera_zoom(value):
-    _link("zoom", str(max(100, min(400, value))))
-
-
 def camera_zoom_rel(delta):
     _link("zoom-rel", str(delta))
 

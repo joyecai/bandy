@@ -14,6 +14,7 @@ __pycache__/
 
 # OpenClaw 运行时状态和模板文件
 .openclaw/
+.clawhub/
 AGENTS.md
 BOOTSTRAP.md
 HEARTBEAT.md

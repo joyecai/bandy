@@ -14,8 +14,8 @@ from .metrics import store, TtsMetric
 
 async def warm_tts(cache: dict):
     """预缓存高频回复的 TTS 音频, 减少首次延迟."""
-    for txt, voice in [("在", "zh-CN-XiaoxiaoNeural"),
-                       ("好的，对话结束", "zh-CN-XiaoxiaoNeural")]:
+    for txt, voice in [("在", "zh-CN-XiaoyiNeural"),
+                       ("好的，对话结束", "zh-CN-XiaoyiNeural")]:
         fd, path = tempfile.mkstemp(suffix='.mp3')
         os.close(fd)
         try:
@@ -29,9 +29,10 @@ async def warm_tts(cache: dict):
 
 
 def select_voice(text):
-    if detect_lang(text) == 'en':
+    from .llm import get_ui_lang
+    if get_ui_lang() == 'en':
         return "en-US-AriaNeural"
-    return "zh-CN-XiaoxiaoNeural"
+    return "zh-CN-XiaoyiNeural"
 
 
 async def synthesize(text, voice=None):

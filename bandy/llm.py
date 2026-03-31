@@ -18,8 +18,19 @@ from .metrics import store, LlmMetric, TtsMetric
 
 logger = logging.getLogger(__name__)
 
-_env_context = ""
-_env_context_en = ""
+_hw_context_zh = ""
+_hw_context_en = ""
+_ui_lang = "zh"
+
+
+def set_ui_lang(lang: str):
+    """由 Dashboard 调用，设置全局 UI 语言 (zh/en)"""
+    global _ui_lang
+    _ui_lang = lang if lang in ("zh", "en") else "zh"
+
+
+def get_ui_lang() -> str:
+    return _ui_lang
 
 _CITY_COORDS = [
     (31.57, 120.30, "无锡"), (31.30, 121.47, "上海"), (32.06, 118.80, "南京"),
@@ -46,168 +57,157 @@ def _reverse_city_zh(lat: float, lon: float, fallback: str) -> str:
     return best if best_d < 0.5 else fallback
 
 
-_REGION_ZH = {
-    "Jiangsu": "江苏", "Zhejiang": "浙江", "Shanghai": "上海",
-    "Beijing": "北京", "Guangdong": "广东", "Sichuan": "四川",
-    "Hubei": "湖北", "Hunan": "湖南", "Fujian": "福建",
-    "Shandong": "山东", "Henan": "河南", "Hebei": "河北",
-    "Anhui": "安徽", "Jiangxi": "江西", "Liaoning": "辽宁",
-    "Chongqing": "重庆", "Tianjin": "天津", "Shaanxi": "陕西",
-    "Shanxi": "山西", "Yunnan": "云南", "Guizhou": "贵州",
-    "Guangxi": "广西", "Hainan": "海南", "Gansu": "甘肃",
-    "Inner Mongolia": "内蒙古", "Tibet": "西藏", "Xinjiang": "新疆",
-    "Ningxia": "宁夏", "Qinghai": "青海", "Heilongjiang": "黑龙江",
-    "Jilin": "吉林", "Taiwan": "台湾", "Hong Kong": "香港", "Macau": "澳门",
-}
 _WEEKDAY_ZH = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 _WEEKDAY_EN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
-def _gather_env_context():
-    """收集系统环境信息，返回 (中文, 英文) 双版本"""
+def _gather_hw_context():
+    """收集硬件/系统信息（启动时调用一次），返回 (中文, 英文)"""
     zh, en = [], []
 
-    now = _dt.datetime.now()
-    zh.append(f"当前时间: {now.strftime('%Y年%m月%d日 %H:%M')} {_WEEKDAY_ZH[now.weekday()]}")
-    en.append(f"Current time: {now.strftime('%Y-%m-%d %H:%M')} {_WEEKDAY_EN[now.weekday()]}")
-
     try:
-        from .weather import _get_system_location, get_weather
-        import requests as _req
+        from .weather import _get_system_location
         loc = _get_system_location()
         if loc:
-            try:
-                proxy = {"http": cfg.PROXY_HTTP, "https": cfg.PROXY_HTTPS} if cfg.PROXY_HTTP else None
-                wr = _req.get(f"https://wttr.in/{loc}?format=j1&lang=zh", timeout=10, proxies=proxy)
-                wd = wr.json()
-                area = wd.get("nearest_area", [{}])[0]
-                region = area.get("region", [{}])[0].get("value", "")
-                area_name = area.get("areaName", [{}])[0].get("value", "")
-                region_zh = _REGION_ZH.get(region, region)
-                lat = float(area.get("latitude", 0))
-                lon = float(area.get("longitude", 0))
-                city_zh = _reverse_city_zh(lat, lon, area_name)
-                city_label_zh = f"{region_zh}{city_zh}".strip() if region_zh else city_zh
-                city_label_en = f"{area_name}, {region}".strip(", ") if region else area_name
-                if city_label_zh:
-                    zh.append(f"用户所在城市: {city_label_zh}")
-                    en.append(f"User location: {city_label_en}")
-                cc = wd.get("current_condition", [{}])[0]
-                if cc:
-                    desc_zh, desc_en = "", ""
-                    try:
-                        desc_zh = cc["lang_zh"][0]["value"]
-                    except Exception:
-                        pass
-                    desc_en = cc.get("weatherDesc", [{}])[0].get("value", "")
-                    if not desc_zh:
-                        desc_zh = desc_en
-                    temp = cc.get("temp_C", "")
-                    humidity = cc.get("humidity", "")
-                    zh.append(f"天气: {desc_zh}，{temp}度，湿度{humidity}%")
-                    en.append(f"Weather: {desc_en}, {temp}°C, humidity {humidity}%")
-            except Exception:
-                weather = get_weather()
-                if weather and "失败" not in weather:
-                    zh.append(f"天气: {weather}")
-                    en.append(f"Weather: {weather}")
-        else:
-            weather = get_weather()
-            if weather and "失败" not in weather:
-                zh.append(f"天气: {weather}")
-                en.append(f"Weather: {weather}")
+            lat, lon = (float(x) for x in loc.split(","))
+            city_zh = _reverse_city_zh(lat, lon, "")
+            if city_zh:
+                zh.append(f"用户所在城市: {city_zh}")
+                en.append(f"User location: {city_zh}")
     except Exception:
         pass
 
     try:
-        sp = subprocess.check_output(
-            ["system_profiler", "SPHardwareDataType"], text=True, timeout=5)
-        model_name, chip_name = "", ""
-        for line in sp.splitlines():
-            line = line.strip()
-            if line.startswith("Model Name:"):
-                model_name = line.split(":", 1)[1].strip()
-            elif line.startswith("Chip:"):
-                chip_name = line.split(":", 1)[1].strip()
-        mem_bytes = int(subprocess.check_output(
-            ["sysctl", "-n", "hw.memsize"], text=True, timeout=3).strip())
-        mem_gb = mem_bytes // (1024 ** 3)
+        def _sysctl(key):
+            return subprocess.check_output(
+                ["/usr/sbin/sysctl", "-n", key], text=True, timeout=3).strip()
+
+        chip = _sysctl("machdep.cpu.brand_string")
+        mem_gb = int(_sysctl("hw.memsize")) // (1024 ** 3)
+        ncpu = _sysctl("hw.ncpu")
+
+        model_name = ""
+        try:
+            sp = subprocess.check_output(
+                ["/usr/sbin/system_profiler", "SPHardwareDataType"],
+                text=True, timeout=8)
+            for line in sp.splitlines():
+                if "Model Name:" in line:
+                    model_name = line.split(":", 1)[1].strip()
+                    break
+        except Exception:
+            pass
+
+        stat = os.statvfs("/")
+        disk_total = f"{(stat.f_frsize * stat.f_blocks) / (1024 ** 3):.0f}GB"
+        disk_free = f"{(stat.f_frsize * stat.f_bavail) / (1024 ** 3):.0f}GB"
+
         mac_ver = platform.mac_ver()[0]
-        hw_zh = f"硬件: {model_name or 'Mac'}, {chip_name or 'Apple Silicon'}, {mem_gb}GB内存, macOS {mac_ver}"
-        hw_en = f"Hardware: {model_name or 'Mac'}, {chip_name or 'Apple Silicon'}, {mem_gb}GB RAM, macOS {mac_ver}"
-        zh.append(hw_zh)
-        en.append(hw_en)
+        parts_zh = [model_name or "Mac", chip or "Apple Silicon"]
+        parts_en = list(parts_zh)
+        parts_zh.append(f"{ncpu}核")
+        parts_en.append(f"{ncpu} cores")
+        parts_zh.append(f"{mem_gb}GB内存")
+        parts_en.append(f"{mem_gb}GB RAM")
+        parts_zh.append(f"磁盘{disk_total}(可用{disk_free})")
+        parts_en.append(f"Disk {disk_total} ({disk_free} free)")
+        parts_zh.append(f"macOS {mac_ver}")
+        parts_en.append(f"macOS {mac_ver}")
+        zh.append("硬件: " + ", ".join(parts_zh))
+        en.append("Hardware: " + ", ".join(parts_en))
     except Exception:
         mac_ver = platform.mac_ver()[0]
         zh.append(f"系统: macOS {mac_ver}")
         en.append(f"System: macOS {mac_ver}")
 
-    m_zh, m_en = [], []
-    m_zh.append(f"STT: Whisper ({cfg.WHISPER_MODEL})")
-    m_en.append(f"STT: Whisper ({cfg.WHISPER_MODEL})")
-    local_llm_repo = cfg._raw.get("local_llm", {}).get("repo", "")
-    if local_llm_repo:
-        short = local_llm_repo.split('/')[-1]
-        m_zh.append(f"本地LLM: {short}")
-        m_en.append(f"Local LLM: {short}")
-    m_zh.append(f"云端Agent: {cfg.API_MODEL}")
-    m_en.append(f"Cloud Agent: {cfg.API_MODEL}")
-    vision_model = cfg.VISION_MODEL
-    if vision_model:
-        short = vision_model.split('/')[-1]
-        m_zh.append(f"视觉: {short}")
-        m_en.append(f"Vision: {short}")
-    tts_cfg = cfg._raw.get("tts", {})
-    tts_engine = tts_cfg.get("engine", "edge")
-    if tts_engine == "edge":
-        m_zh.append("TTS: Edge TTS (云端)")
-        m_en.append("TTS: Edge TTS (cloud)")
-    else:
-        tts_repo = tts_cfg.get("repo", "")
-        tts_short = tts_repo.split('/')[-1] if tts_repo else 'local'
-        m_zh.append(f"TTS: {tts_short}")
-        m_en.append(f"TTS: {tts_short}")
-    zh.append("搭载模型: " + ", ".join(m_zh))
-    en.append("Models: " + ", ".join(m_en))
-
     return "\n".join(zh), "\n".join(en)
 
 
+def _current_models_context():
+    """实时从 config.yaml 读取当前选中的模型，返回 (中文, 英文)"""
+    try:
+        from .models import current_selection
+        sel = current_selection()
+    except Exception:
+        sel = {}
+
+    m_zh, m_en = [], []
+
+    stt = sel.get("stt", cfg.WHISPER_MODEL)
+    stt_short = stt.split("/")[-1] if stt else cfg.WHISPER_MODEL
+    m_zh.append(f"STT: {stt_short}")
+    m_en.append(f"STT: {stt_short}")
+
+    llm_repo = sel.get("llm", cfg.LOCAL_LLM_REPO)
+    if llm_repo:
+        m_zh.append(f"本地LLM: {llm_repo.split('/')[-1]}")
+        m_en.append(f"Local LLM: {llm_repo.split('/')[-1]}")
+
+    agent = sel.get("agent_model", cfg.API_MODEL)
+    if agent:
+        m_zh.append(f"云端Agent: {agent}")
+        m_en.append(f"Cloud Agent: {agent}")
+
+    vision = sel.get("vision", cfg.VISION_MODEL)
+    if vision:
+        m_zh.append(f"视觉: {vision.split('/')[-1]}")
+        m_en.append(f"Vision: {vision.split('/')[-1]}")
+
+    tts = sel.get("tts", "")
+    if tts == "edge-tts":
+        m_zh.append("TTS: Edge TTS (云端)")
+        m_en.append("TTS: Edge TTS (cloud)")
+    elif tts:
+        m_zh.append(f"TTS: {tts.split('/')[-1]}")
+        m_en.append(f"TTS: {tts.split('/')[-1]}")
+
+    return "搭载模型: " + ", ".join(m_zh), "Models: " + ", ".join(m_en)
+
+
 def warmup_context():
-    """启动时调用，预收集环境信息注入系统提示词"""
-    global _env_context, _env_context_en, SYS_ZH, SYS_EN
+    """启动时调用，预收集硬件环境信息"""
+    global _hw_context_zh, _hw_context_en
     logger.info("收集系统环境信息...")
-    _env_context, _env_context_en = _gather_env_context()
-    logger.info("环境上下文:\n%s", _env_context)
-    SYS_ZH, SYS_EN = _build_prompt()
+    _hw_context_zh, _hw_context_en = _gather_hw_context()
+    models_zh, _ = _current_models_context()
+    full = f"{_hw_context_zh}\n{models_zh}" if _hw_context_zh else models_zh
+    logger.info("环境上下文:\n%s", full)
 
 
 def get_env_context() -> dict:
     """返回中英双语运行时环境上下文（供 dashboard 展示）"""
-    return {"zh": _env_context, "en": _env_context_en}
+    models_zh, models_en = _current_models_context()
+    zh = f"{_hw_context_zh}\n{models_zh}" if _hw_context_zh else models_zh
+    en = f"{_hw_context_en}\n{models_en}" if _hw_context_en else models_en
+    return {"zh": zh, "en": en}
 
 
 def _build_prompt():
-    ctx_zh = f"\n\n[系统环境]\n{_env_context}" if _env_context else ""
-    ctx_en = f"\n\n[System Environment]\n{_env_context_en}" if _env_context_en else ""
+    """每次调用动态生成系统提示词（含实时时间 + 实时模型）"""
+    now = _dt.datetime.now()
+    time_zh = f"当前时间: {now.strftime('%Y年%m月%d日 %H时%M分')} {_WEEKDAY_ZH[now.weekday()]}"
+    time_en = f"Current time: {now.strftime('%Y-%m-%d %H:%M')} {_WEEKDAY_EN[now.weekday()]}"
+    models_zh, models_en = _current_models_context()
+    hw_zh = f"{_hw_context_zh}\n{models_zh}" if _hw_context_zh else models_zh
+    hw_en = f"{_hw_context_en}\n{models_en}" if _hw_context_en else models_en
+    env_zh = f"\n{time_zh}\n{hw_zh}"
+    env_en = f"\n{time_en}\n{hw_en}"
     zh = (
         "你是Bandy，运行在用户Mac上的语音助手，用户通过语音和你交流，你的回答会被TTS朗读出来。"
         f"你的云端大模型是{cfg.API_MODEL}。"
         "要求：1.用纯文本回复，禁止Markdown。2.简洁口语化，1到3句话。3.不加括号说明。4.用中文回复。"
         "5.禁止使用任何emoji、图标、特殊符号字符。6.数字中的小数点读作'点'，例如2.5读作2点5。"
-        + ctx_zh
+        "7.报时必须精确到分钟，例如'现在是下午4点23分'。"
+        f"\n\n[系统环境]{env_zh}"
     )
     en = (
         "You are Bandy, a voice assistant on the user's Mac. Your reply is read aloud by TTS. "
         f"Your cloud LLM is {cfg.API_MODEL}. "
         "Rules: plain text only, no Markdown, no emoji or icon characters, "
         "concise conversational style, 1-3 sentences, reply in English."
-        + ctx_en
+        f"\n\n[System Environment]{env_en}"
     )
     return zh, en
-
-
-SYS_ZH, SYS_EN = _build_prompt()
 
 _SENT_BREAK = re.compile(r'[。！？!?\n]|\.(?!\d)')
 
@@ -216,11 +216,27 @@ async def call_streaming(assistant, prompt):
     """流式调用 LLM, 流水线 TTS (合成与播放并行, 消除句间停顿)."""
     import aiohttp
 
-    sys_p = SYS_EN if detect_lang(prompt) == 'en' else SYS_ZH
+    use_local = cfg.LLM_PROVIDER == "local" and cfg.LOCAL_LLM_REPO
+    if use_local:
+        api_url = cfg.LOCAL_LLM_URL + "/chat/completions"
+        api_key = cfg.LOCAL_LLM_KEY
+        api_model = cfg.LOCAL_LLM_REPO
+    else:
+        api_url = cfg.API_URL
+        api_key = cfg.API_KEY
+        api_model = cfg.API_MODEL
+
+    sys_zh, sys_en = _build_prompt()
+    sys_p = sys_en if _ui_lang == 'en' else sys_zh
     messages = [{"role": "system", "content": sys_p}]
-    for h in assistant._recent_history():
+    for h in assistant._recent_history(limit=50):
         messages.append({"role": h["role"], "content": h["text"]})
     messages.append({"role": "user", "content": prompt})
+
+    req_body = {"model": api_model, "messages": messages, "stream": True}
+    if use_local:
+        req_body["max_tokens"] = 500
+        req_body["chat_template_kwargs"] = {"enable_thinking": False}
 
     try:
         session = await assistant._get_session()
@@ -228,11 +244,11 @@ async def call_streaming(assistant, prompt):
         _t_first_token = 0.0
         _token_count = 0
         resp = await session.post(
-            cfg.API_URL, headers={"Authorization": f"Bearer {cfg.API_KEY}"},
-            json={"model": cfg.API_MODEL, "messages": messages, "stream": True},
+            api_url, headers={"Authorization": f"Bearer {api_key}"},
+            json=req_body,
             timeout=aiohttp.ClientTimeout(total=60))
 
-        voice = "en-US-AriaNeural" if detect_lang(prompt) == 'en' else "zh-CN-XiaoxiaoNeural"
+        voice = "en-US-AriaNeural" if _ui_lang == 'en' else "zh-CN-XiaoyiNeural"
         pipe = asyncio.Queue()
         synth_tasks = []
         aborted = False
@@ -341,8 +357,9 @@ async def call_streaming(assistant, prompt):
         await player_task
         resp.close()
         _total_time = _time.time() - _t_start
+        src = "本地" if use_local else "云端"
         if full:
-            print(f"🤖 回复: {strip_markdown(full)}", flush=True)
+            print(f"🤖 回复({src}): {strip_markdown(full)}", flush=True)
 
         store.record_llm(LlmMetric(
             prompt=prompt, reply=strip_markdown(full) if full else "",
@@ -358,17 +375,24 @@ async def call_streaming(assistant, prompt):
             except (Exception, asyncio.CancelledError):
                 pass
 
-        return strip_markdown(full) if full else "抱歉，没有收到回复"
+        cleaned = strip_markdown(full) if full else ""
+        if not cleaned and full:
+            return _TOOL_CALL_SENTINEL
+        return cleaned or "抱歉，没有收到回复"
     except (Exception, asyncio.CancelledError) as e:
         print(f"⚠️ API 错误: {e}", flush=True)
         return "抱歉，网络出了点问题，请再说一次"
+
+
+_TOOL_CALL_SENTINEL = "__TOOL_CALL__"
 
 
 async def call_api(assistant, prompt):
     """非流式调用 (备用)"""
     try:
         import aiohttp
-        sys_p = SYS_EN if detect_lang(prompt) == 'en' else SYS_ZH
+        sys_zh, sys_en = _build_prompt()
+        sys_p = sys_en if _ui_lang == 'en' else sys_zh
         messages = [{"role": "system", "content": sys_p}]
         for h in assistant._recent_history():
             messages.append({"role": h["role"], "content": h["text"]})

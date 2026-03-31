@@ -59,23 +59,29 @@ def _ensure_loaded():
             return
         from mlx_vlm import load
         repo = cfg.VISION_MODEL
-        logger.info("加载视觉模型: %s ...", repo)
+        print(f"👁️ 加载视觉模型: {repo} ...", flush=True)
         t0 = _time.time()
         _model, _processor = load(repo)
         _config = _model.config if hasattr(_model, 'config') else None
         _loaded = True
-        logger.info("视觉模型就绪 (%.1fs)", _time.time() - t0)
+        print(f"👁️ 视觉模型就绪 ({_time.time() - t0:.1f}s)", flush=True)
 
 
-def preload():
-    """启动时预热: 在后台线程中预加载模型"""
+def preload(blocking=False):
+    """启动时预热视觉模型。blocking=True 时同步等待加载完成。"""
     if not cfg.VISION_PRELOAD:
         return
     def _warmup():
-        _ensure_loaded()
-        logger.info("视觉模型预热完成: %s", cfg.VISION_MODEL)
-    t = threading.Thread(target=_warmup, daemon=True, name="vision-preload")
-    t.start()
+        try:
+            _ensure_loaded()
+            print(f"👁️ 视觉模型预热完成: {cfg.VISION_MODEL}", flush=True)
+        except Exception as e:
+            print(f"⚠️ 视觉模型预热失败: {type(e).__name__}: {e}", flush=True)
+    if blocking:
+        _warmup()
+    else:
+        t = threading.Thread(target=_warmup, daemon=True, name="vision-preload")
+        t.start()
 
 
 def capture_frame():
@@ -96,24 +102,70 @@ def capture_frame():
     return None
 
 
+import re as _re
+
+_CONV_MARKER = _re.compile(
+    r'\n\s*(Human|User|Assistant|A:|Q:|H:|请告诉|如果您有|祝您)',
+    _re.IGNORECASE)
+
+
+def _clean_vision_text(text):
+    """清洗视觉模型输出: 去掉思维链、对话标记、前缀、重复文本"""
+    text = text.strip()
+    text = _re.sub(r'<think>.*?</think>\s*', '', text, flags=_re.DOTALL)
+    for prefix in ("Assistant:", "assistant:", "A:", "回答:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+    m = _CONV_MARKER.search(text)
+    if m:
+        text = text[:m.start()].strip()
+    lines = text.split('\n')
+    seen = set()
+    deduped = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and stripped not in seen:
+            seen.add(stripped)
+            deduped.append(line)
+    text = '\n'.join(deduped).strip()
+    sentences = _re.split(r'(?<=[。！？!?])', text)
+    seen_s = set()
+    unique = []
+    for s in sentences:
+        s_clean = s.strip()
+        if s_clean and s_clean not in seen_s:
+            seen_s.add(s_clean)
+            unique.append(s)
+    return ''.join(unique).strip()
+
+
 def vision_query(image_path, prompt="用简洁中文描述你看到了什么", history=None):
     """调用 MLX 视觉模型识别图片内容."""
     from mlx_vlm import generate
+    from mlx_vlm.prompt_utils import apply_chat_template
 
     _ensure_loaded()
     store.set_model_info("vision", cfg.VISION_MODEL, "MLX-VLM (local)")
+
+    formatted = apply_chat_template(
+        _processor, _config, prompt,
+        num_images=1, enable_thinking=False)
 
     t0 = _time.time()
     try:
         gen = generate(
             _model, _processor,
             image=image_path,
-            prompt=prompt,
-            max_tokens=256,
+            prompt=formatted,
+            max_tokens=150,
             verbose=False,
+            repetition_penalty=1.2,
+            repetition_context_size=64,
+            enable_thinking=False,
         )
         result = gen.text if hasattr(gen, 'text') else str(gen)
-        if not result or not result.strip():
+        result = _clean_vision_text(result)
+        if not result:
             result = "识别失败"
         if detect_lang(result) == 'zh':
             result = to_simplified(result)
@@ -121,7 +173,8 @@ def vision_query(image_path, prompt="用简洁中文描述你看到了什么", h
             prompt=prompt, result=result, process_time=_time.time() - t0))
         return result
     except Exception as e:
-        logger.exception("视觉识别出错")
+        err_msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        logger.exception("视觉识别出错: %s", err_msg)
         store.record_vision(VisionMetric(
-            prompt=prompt, result=str(e), process_time=_time.time() - t0))
-        return f"视觉识别出错: {e}"
+            prompt=prompt, result=err_msg, process_time=_time.time() - t0))
+        return f"视觉识别出错，请稍后再试"

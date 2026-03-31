@@ -19,34 +19,18 @@ _RE_PARAMS_M = re.compile(r"(\d+)\s*[Mm](?!ini|ax|od|LP|CP)", re.I)
 _RE_QUANT = re.compile(r"(qat[- ]?4bit|4bit|8bit|bf16|fp16|fp32|int8|int4)", re.I)
 
 _MODEL_META = {
-    # ── STT ──
-    "Systran/faster-whisper-base": {
-        "params": "74M", "quant": "FP16", "desc_zh": "Whisper base, 轻量快速", "desc_en": "Whisper base, lightweight & fast",
-        "speed_zh": "1s音频≈0.05s", "speed_en": "1s audio≈0.05s",
-    },
-    "Systran/faster-whisper-small": {
-        "params": "244M", "quant": "FP16", "desc_zh": "Whisper small, 均衡之选", "desc_en": "Whisper small, balanced",
-        "speed_zh": "1s音频≈0.1s", "speed_en": "1s audio≈0.1s",
-    },
-    "Systran/faster-whisper-large-v3": {
-        "params": "1.5B", "quant": "FP16", "desc_zh": "Whisper large-v3, 高精度", "desc_en": "Whisper large-v3, high accuracy",
-        "speed_zh": "1s音频≈0.6s", "speed_en": "1s audio≈0.6s",
-    },
-    "mobiuslabsgmbh/faster-whisper-large-v3-turbo": {
-        "params": "809M", "quant": "FP16", "desc_zh": "large-v3-turbo, 速度精度兼顾", "desc_en": "large-v3-turbo, speed+accuracy",
-        "speed_zh": "1s音频≈0.3s", "speed_en": "1s audio≈0.3s",
+    # ── STT (MLX) ──
+    "mlx-community/whisper-small-mlx": {
+        "params": "244M", "quant": "FP16", "desc_zh": "Whisper small MLX, 均衡之选 (默认)", "desc_en": "Whisper small MLX, balanced (default)",
+        "speed_zh": "1s音频≈0.06s", "speed_en": "1s audio≈0.06s",
     },
     "mlx-community/whisper-large-v3-turbo": {
-        "params": "809M", "quant": "FP16", "desc_zh": "MLX whisper turbo, Apple Silicon 优化", "desc_en": "MLX whisper turbo, Apple Silicon",
+        "params": "809M", "quant": "FP16", "desc_zh": "MLX whisper turbo, 速度精度兼顾", "desc_en": "MLX whisper turbo, speed+accuracy",
         "speed_zh": "1s音频≈0.2s", "speed_en": "1s audio≈0.2s",
     },
-    "mlx-community/Qwen3-ASR-0.6B-8bit": {
-        "params": "0.6B", "quant": "8bit", "desc_zh": "Qwen3 ASR, 中英双语, MLX原生", "desc_en": "Qwen3 ASR, zh/en bilingual, MLX native",
-        "speed_zh": "1s音频≈0.09s", "speed_en": "1s audio≈0.09s",
-    },
-    "FunAudioLLM/SenseVoiceSmall": {
-        "params": "234M", "quant": "FP32", "desc_zh": "SenseVoice, 多语种+情感识别", "desc_en": "SenseVoice, multilingual+emotion",
-        "speed_zh": "1s音频≈0.15s", "speed_en": "1s audio≈0.15s",
+    "mlx-community/whisper-large-v3-mlx": {
+        "params": "1.5B", "quant": "FP16", "desc_zh": "MLX whisper large-v3, 高精度", "desc_en": "MLX whisper large-v3, high accuracy",
+        "speed_zh": "1s音频≈0.5s", "speed_en": "1s audio≈0.5s",
     },
     # ── LLM (本地) ── 2B 以下推荐标 ★
     "mlx-community/Qwen3-0.6B-4bit": {
@@ -120,13 +104,9 @@ _MODEL_META = {
         "speed_zh": "10字≈2s", "speed_en": "10chars≈2s",
     },
     # ── Vision ──
-    "andrevp/MiniCPM-o-4_5-MLX-4bit": {
-        "params": "8B", "quant": "4bit", "desc_zh": "MiniCPM-o 4.5 MLX版, 多模态", "desc_en": "MiniCPM-o 4.5 MLX, multimodal",
+    "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit": {
+        "params": "8B", "quant": "4bit", "desc_zh": "MiniCPM-o 4.5 MLX 4bit (默认)", "desc_en": "MiniCPM-o 4.5 MLX 4bit (default)",
         "speed_zh": "≈3s/张", "speed_en": "≈3s/image",
-    },
-    "openbmb/MiniCPM-o-4_5": {
-        "params": "8B", "quant": "FP16", "desc_zh": "MiniCPM-o 4.5 全精度", "desc_en": "MiniCPM-o 4.5 full precision",
-        "speed_zh": "≈6s/张", "speed_en": "≈6s/image",
     },
     "mlx-community/Qwen2.5-VL-3B-Instruct-4bit": {
         "params": "3B", "quant": "4bit", "desc_zh": "Qwen2.5 VL 3B, 轻量视觉", "desc_en": "Qwen2.5 VL 3B, lightweight vision",
@@ -206,30 +186,48 @@ def _extract_meta(repo: str, name: str) -> dict:
 
 
 def scan_models() -> dict:
-    """扫描 HF 缓存, 返回 {stt, llm, tts, vision} 各含模型列表"""
+    """扫描 HF 缓存 + _MODEL_META 中的本地路径, 返回 {stt, llm, tts, vision} 各含模型列表"""
     result = {"stt": [], "llm": [], "tts": [], "vision": []}
-    if not os.path.isdir(_HF_CACHE):
-        return result
+    seen_repos = set()
 
-    skip = {"pvad", "spkrec", "gguf"}
-    for entry in sorted(os.listdir(_HF_CACHE)):
-        if not entry.startswith("models--"):
-            continue
-        repo = entry[len("models--"):].replace("--", "/")
-        low = repo.lower()
-        if any(s in low for s in skip):
-            continue
+    if os.path.isdir(_HF_CACHE):
+        skip = {"pvad", "spkrec", "gguf"}
+        for entry in sorted(os.listdir(_HF_CACHE)):
+            if not entry.startswith("models--"):
+                continue
+            repo = entry[len("models--"):].replace("--", "/")
+            low = repo.lower()
+            if any(s in low for s in skip):
+                continue
 
-        full_path = os.path.join(_HF_CACHE, entry)
-        cat = _classify(repo)
-        size = _human_size(full_path)
-        mb = round(_size_mb(full_path), 1)
-        short = repo.split("/")[-1]
-        meta = _extract_meta(repo, short)
-        result[cat].append({
-            "repo": repo, "size": size, "size_mb": mb, "short": short,
-            **meta,
-        })
+            full_path = os.path.join(_HF_CACHE, entry)
+            cat = _classify(repo)
+            size = _human_size(full_path)
+            mb = round(_size_mb(full_path), 1)
+            short = repo.split("/")[-1]
+            meta = _extract_meta(repo, short)
+            result[cat].append({
+                "repo": repo, "size": size, "size_mb": mb, "short": short,
+                **meta,
+            })
+            seen_repos.add(repo)
+
+    for key, meta in _MODEL_META.items():
+        if key.startswith("/") and os.path.isdir(key) and key not in seen_repos:
+            short = os.path.basename(key)
+            cat = _classify(short)
+            size = _human_size(key)
+            mb = round(_size_mb(key), 1)
+            result[cat].append({
+                "repo": key, "size": size, "size_mb": mb, "short": short,
+                "params": meta.get("params", ""),
+                "quant": meta.get("quant", ""),
+                "desc_zh": meta.get("desc_zh", ""),
+                "desc_en": meta.get("desc_en", ""),
+                "speed_zh": meta.get("speed_zh", ""),
+                "speed_en": meta.get("speed_en", ""),
+                "en_only": meta.get("en_only", False),
+            })
 
     return result
 
@@ -245,12 +243,14 @@ def current_selection() -> dict:
     vi = data.get("vision", {})
     tts_cfg = data.get("tts", {})
 
+    stt_sel = wh.get("model", "mlx-community/whisper-small-mlx")
+
     tts_sel = "edge-tts"
     if tts_cfg.get("engine") == "local" or tts_cfg.get("engine") == "qwen3":
         tts_sel = tts_cfg.get("repo", tts_cfg.get("qwen3", {}).get("repo", "edge-tts"))
 
     return {
-        "stt": wh.get("model", "small"),
+        "stt": stt_sel,
         "llm": local.get("repo", ""),
         "agent_model": agent.get("model", api.get("model", "")),
         "agent_provider": agent.get("provider", ""),
@@ -265,14 +265,9 @@ def save_selection(category: str, repo: str) -> bool:
         data = yaml.safe_load(f) or {}
 
     if category == "stt":
-        low = repo.lower()
-        if "faster-whisper" in low:
-            short = repo.split("/")[-1].replace("faster-whisper-", "")
-            data.setdefault("whisper", {})["model"] = short
-        elif "asr" in low or "sensevoice" in low:
-            data.setdefault("asr", {})["model_dir"] = repo
-        else:
-            data.setdefault("whisper", {})["model"] = repo
+        data.setdefault("whisper", {})["model"] = repo
+        if "asr" in data:
+            data["asr"].pop("model_dir", None)
     elif category == "llm":
         data.setdefault("local_llm", {})["repo"] = repo
     elif category == "agent":
@@ -307,17 +302,6 @@ def _refresh_state():
     with open(_STATE_PATH, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
     return state
-
-
-def load_state() -> dict:
-    """面板启动时加载: 优先读 JSON 缓存，不存在则重新扫描"""
-    if os.path.isfile(_STATE_PATH):
-        try:
-            with open(_STATE_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return _refresh_state()
 
 
 def refresh_state() -> dict:

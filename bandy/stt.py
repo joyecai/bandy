@@ -1,9 +1,8 @@
-"""语音识别: faster-whisper STT"""
+"""语音识别: mlx-whisper STT (Apple Silicon MLX 加速)"""
 import os
 import time as _time
 
 import numpy as np
-
 import re
 
 from .config import cfg
@@ -30,31 +29,32 @@ def _post_fix(text):
 
 
 def load_whisper():
-    from faster_whisper import WhisperModel
-    print(f"🔊 加载 Whisper ({cfg.WHISPER_MODEL})...", flush=True)
+    import mlx_whisper
+    repo = cfg.WHISPER_MODEL
+    print(f"🔊 加载 Whisper MLX ({repo})...", flush=True)
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    m = WhisperModel(cfg.WHISPER_MODEL, device=cfg.WHISPER_DEVICE,
-                     compute_type=cfg.WHISPER_COMPUTE)
-    store.set_model_info("stt", f"Whisper ({cfg.WHISPER_MODEL})",
-                         f"{cfg.WHISPER_DEVICE}/{cfg.WHISPER_COMPUTE}")
-    return m
+    silence = np.zeros(cfg.SAMPLE_RATE, dtype=np.float32)
+    mlx_whisper.transcribe(silence, path_or_hf_repo=repo,
+                           language="zh", fp16=True)
+    store.set_model_info("stt", f"Whisper ({repo.split('/')[-1]})", "MLX fp16")
+    return repo
 
 
 def warm_whisper(model):
     """用一段静音做一次推理, 触发 JIT 编译, 消除首次识别延迟."""
+    import mlx_whisper
     print("🔥 预热 Whisper...", flush=True)
     try:
         silence = np.zeros(cfg.SAMPLE_RATE, dtype=np.float32)
-        segs, _ = model.transcribe(silence, language="zh", beam_size=1, vad_filter=False)
-        for _ in segs:
-            pass
+        mlx_whisper.transcribe(silence, path_or_hf_repo=model,
+                               language="zh", fp16=True)
     except Exception:
         pass
 
 
 def transcribe_file(model, file_path):
     """转写音频文件 (支持 ogg/mp3/wav 等), 返回文本."""
-    import subprocess, tempfile
+    import subprocess, tempfile, mlx_whisper
     wav_path = None
     try:
         fd, wav_path = tempfile.mkstemp(suffix='.wav')
@@ -64,7 +64,7 @@ def transcribe_file(model, file_path):
              "-ac", "1", "-f", "wav", wav_path],
             capture_output=True, timeout=30)
         import soundfile as sf
-        audio, sr = sf.read(wav_path, dtype='float32')
+        audio, _ = sf.read(wav_path, dtype='float32')
         if len(audio.shape) > 1:
             audio = audio[:, 0]
     except Exception:
@@ -83,9 +83,11 @@ def transcribe_file(model, file_path):
     if len(audio) < cfg.SAMPLE_RATE * 0.3:
         return ""
     t0 = _time.time()
-    segs, _ = model.transcribe(audio, temperature=0.0, beam_size=3,
-                               vad_filter=True, condition_on_previous_text=False)
-    text = "".join(s.text for s in segs).strip()
+    result = mlx_whisper.transcribe(
+        audio, path_or_hf_repo=model,
+        temperature=0.0, condition_on_previous_text=False,
+        fp16=True)
+    text = (result.get("text") or "").strip()
     proc_time = _time.time() - t0
     if detect_lang(text) == 'zh':
         text = to_simplified(text)
@@ -98,14 +100,17 @@ def transcribe_file(model, file_path):
 
 
 def recognize(model, audio):
+    import mlx_whisper
     try:
         if len(audio) < cfg.SAMPLE_RATE * cfg.MIN_SPEECH_DUR:
             return ""
         audio_dur = len(audio) / cfg.SAMPLE_RATE
         t0 = _time.time()
-        segs, _ = model.transcribe(audio, temperature=0.0, beam_size=1,
-                                   vad_filter=True, condition_on_previous_text=False)
-        text = "".join(s.text for s in segs).strip()
+        result = mlx_whisper.transcribe(
+            audio, path_or_hf_repo=model,
+            temperature=0.0, condition_on_previous_text=False,
+            language="zh", fp16=True)
+        text = (result.get("text") or "").strip()
         proc_time = _time.time() - t0
         if detect_lang(text) == 'zh':
             text = to_simplified(text)

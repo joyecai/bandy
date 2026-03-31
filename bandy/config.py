@@ -36,13 +36,23 @@ class _Cfg:
         self.SPEAK_COOLDOWN = au.get("speak_cooldown", 0.5)
         self.PLAYBACK_SPEED = str(au.get("playback_speed", 1.1))
 
+        llm = data.get("llm", {})
+        self.LLM_PROVIDER = llm.get("provider", "cloud")
+        local_llm_cfg = llm.get("local", {})
+        self.LOCAL_LLM_URL = local_llm_cfg.get("url", "http://127.0.0.1:8766/v1")
+        self.LOCAL_LLM_MODEL = local_llm_cfg.get("model_name", "local-model")
+        self.LOCAL_LLM_KEY = local_llm_cfg.get("api_key", "local")
+
+        ll = data.get("local_llm", {})
+        self.LOCAL_LLM_REPO = ll.get("repo", "")
+        self.LOCAL_LLM_HOST = ll.get("server_host", "127.0.0.1")
+        self.LOCAL_LLM_PORT = ll.get("server_port", 8766)
+
         wh = data.get("whisper", {})
-        self.WHISPER_MODEL = wh.get("model", "small")
-        self.WHISPER_DEVICE = wh.get("device", "auto")
-        self.WHISPER_COMPUTE = wh.get("compute_type", "int8")
+        self.WHISPER_MODEL = wh.get("model", "mlx-community/whisper-small-mlx")
 
         vi = data.get("vision", {})
-        self.VISION_MODEL = vi.get("model", "mlx-community/Qwen2.5-VL-3B-Instruct-4bit")
+        self.VISION_MODEL = vi.get("model", "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit")
         self.VISION_PRELOAD = vi.get("preload", False)
         self.OLLAMA_URL = vi.get("ollama_url", "http://localhost:11434")
         self.IMAGESNAP = vi.get("imagesnap", "/opt/homebrew/bin/imagesnap")
@@ -55,7 +65,6 @@ class _Cfg:
 
         conv = data.get("conversation", {})
         self.CONVERSATION_TTL = conv.get("ttl", 120)
-        self.HISTORY_TTL = conv.get("history_ttl", 10800)
         self.HISTORY_MAX = conv.get("history_max", 50)
 
         px = data.get("proxy", {})
@@ -96,3 +105,10 @@ def _init_env(c: _Cfg):
 
 cfg = _Cfg(_load())
 _init_env(cfg)
+
+
+def reload():
+    """重新读取 config.yaml，更新全局 cfg 的所有属性"""
+    fresh = _Cfg(_load())
+    for k, v in vars(fresh).items():
+        setattr(cfg, k, v)

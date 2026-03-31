@@ -97,7 +97,7 @@ class MetricsStore:
         self.models = {
             "stt": {"name": "", "version": ""},
             "llm": {"name": "", "version": ""},
-            "tts": {"name": "Edge TTS", "version": "XiaoxiaoNeural / AriaNeural"},
+            "tts": {"name": "Edge TTS", "version": "XiaoyiNeural / AriaNeural"},
             "vision": {"name": "", "version": ""},
         }
 
@@ -124,6 +124,16 @@ class MetricsStore:
                 self._current_session.active = False
                 self._current_session.end_time = time.time()
             self._current_session = None
+
+    def clear_sessions(self):
+        with self._lock:
+            self.sessions.clear()
+            self._current_session = None
+            self.stt_history.clear()
+            self.llm_history.clear()
+            self.tts_history.clear()
+            self.vision_history.clear()
+            self.start_time = time.time()
 
     def add_turn(self, role, text, **kwargs):
         with self._lock:

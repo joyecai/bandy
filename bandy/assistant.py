@@ -5,7 +5,6 @@ import asyncio
 import signal
 import threading
 import queue
-import datetime as dt
 
 import numpy as np
 
@@ -14,7 +13,6 @@ from . import stt as stt_mod
 from . import tts as tts_mod
 from .camera import disable_ai_tracking, camera_quit
 from .commands import process_command
-from .utils import strip_markdown
 from .metrics import store
 
 
@@ -29,6 +27,7 @@ class VoiceAssistant:
         self.conversation_mode = False
         self.ai_tracking_active = False
         self.last_command_time = 0
+        self._session_start = 0.0
 
         self._aio_session = None
         self._speech_queue = queue.Queue(maxsize=5)
@@ -47,6 +46,9 @@ class VoiceAssistant:
         self._vision_frame = None
         self._vision_time = 0.0
         self._vision_history = []
+        self._bg_tasks = set()
+        self._child_procs = set()
+        self._llm_server_proc = None
 
     # -- 历史管理 --
 
@@ -57,21 +59,8 @@ class VoiceAssistant:
         store.add_turn(role, text, **metric_kwargs)
 
     def _recent_history(self, max_age=None, limit=20):
-        cutoff = time.time() - (max_age or cfg.CONVERSATION_TTL)
+        cutoff = self._session_start if self._session_start > 0 else time.time() - (max_age or cfg.CONVERSATION_TTL)
         return [h for h in self._history if h["ts"] >= cutoff][-limit:]
-
-    def _format_context(self, max_age=None):
-        if max_age is None:
-            max_age = cfg.HISTORY_TTL
-        entries = self._recent_history(max_age=max_age, limit=30)
-        if not entries:
-            return ""
-        lines = []
-        for h in entries:
-            t = dt.datetime.fromtimestamp(h["ts"]).strftime("%H:%M")
-            who = "用户" if h["role"] == "user" else "助手"
-            lines.append(f"[{t}] {who}: {h['text']}")
-        return "以下是最近的对话记录:\n" + "\n".join(lines)
 
     # -- 初始化 --
 
@@ -79,6 +68,8 @@ class VoiceAssistant:
         import pyaudio
         from scipy.signal import butter
 
+        if cfg.LOCAL_LLM_REPO:
+            self._start_local_llm()
         if not self.whisper_model:
             self.whisper_model = stt_mod.load_whisper()
         if not self._pa:
@@ -88,10 +79,68 @@ class VoiceAssistant:
         await tts_mod.warm_tts(self._tts_cache)
         stt_mod.warm_whisper(self.whisper_model)
         from . import vision as vision_mod
-        vision_mod.preload()
+        vision_mod.preload(blocking=True)
         from .llm import warmup_context
         warmup_context()
+        if cfg.LOCAL_LLM_REPO:
+            self._warm_local_llm()
         print("✅ 已就绪\n", flush=True)
+
+    def _start_local_llm(self):
+        import subprocess
+        port = cfg.LOCAL_LLM_PORT
+        host = cfg.LOCAL_LLM_HOST
+        repo = cfg.LOCAL_LLM_REPO
+        short = repo.split('/')[-1]
+        print(f"🧠 加载本地 LLM ({short})...", flush=True)
+        try:
+            out = subprocess.check_output(["lsof", "-ti", f":{port}"], text=True).strip()
+            for pid in out.split():
+                pid = pid.strip()
+                if pid and pid != str(os.getpid()):
+                    os.kill(int(pid), 9)
+        except (subprocess.CalledProcessError, OSError):
+            pass
+        self._llm_server_proc = subprocess.Popen(
+            ["/opt/homebrew/Cellar/python@3.11/3.11.15/bin/python3.11",
+             "-m", "mlx_lm.server",
+             "--model", repo,
+             "--host", host,
+             "--port", str(port)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        import urllib.request
+        url = f"http://{host}:{port}/v1/models"
+        for i in range(60):
+            try:
+                urllib.request.urlopen(url, timeout=1)
+                print(f"   本地 LLM 服务已就绪 (端口 {port})", flush=True)
+                return
+            except Exception:
+                time.sleep(1)
+        print(f"⚠️ 本地 LLM 服务启动超时", flush=True)
+
+    def _warm_local_llm(self):
+        import urllib.request, json
+        print("🔥 预热本地 LLM...", flush=True)
+        url = f"{cfg.LOCAL_LLM_URL}/chat/completions"
+        body = json.dumps({
+            "model": cfg.LOCAL_LLM_REPO,
+            "messages": [
+                {"role": "system", "content": "你是语音助手"},
+                {"role": "user", "content": "你好"}
+            ],
+            "max_tokens": 32,
+            "chat_template_kwargs": {"enable_thinking": False}
+        }).encode()
+        req = urllib.request.Request(url, data=body,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {cfg.LOCAL_LLM_KEY}"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp.read()
+            print("   本地 LLM 预热完成", flush=True)
+        except Exception as e:
+            print(f"⚠️ 本地 LLM 预热失败: {e}", flush=True)
 
     def _calibrate_noise(self):
         import pyaudio
@@ -212,6 +261,18 @@ class VoiceAssistant:
 
     # -- TTS --
 
+    def _kill_playback(self):
+        """立即终止当前 TTS 播放"""
+        proc = self._playback_proc
+        if proc:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        self._playback_proc = None
+        self._is_speaking = False
+        self._barge_in = False
+
     async def speak(self, text):
         text = text.strip()
         if not text:
@@ -301,11 +362,34 @@ class VoiceAssistant:
 
     def _shutdown(self):
         self.running = False
-        if self._playback_proc:
+        if self._llm_server_proc:
             try:
-                self._playback_proc.terminate()
+                self._llm_server_proc.terminate()
+                self._llm_server_proc.wait(timeout=5)
+            except Exception:
+                try:
+                    self._llm_server_proc.kill()
+                except Exception:
+                    pass
+            self._llm_server_proc = None
+        for proc in list(self._child_procs):
+            try:
+                proc.kill()
             except Exception:
                 pass
+        self._child_procs.clear()
+        if self._playback_proc:
+            try:
+                self._playback_proc.kill()
+            except Exception:
+                pass
+            self._playback_proc = None
+        for task in list(self._bg_tasks):
+            try:
+                task.cancel()
+            except Exception:
+                pass
+        self._bg_tasks.clear()
         if self._audio_stream:
             try:
                 self._audio_stream.stop_stream()
@@ -340,7 +424,11 @@ class VoiceAssistant:
 
         await self.load_all()
 
-        store.set_model_info("llm", cfg.API_MODEL, cfg.API_URL.split("//")[-1].split("/")[0])
+        if cfg.LLM_PROVIDER == "local" and cfg.LOCAL_LLM_REPO:
+            short = cfg.LOCAL_LLM_REPO.split('/')[-1]
+            store.set_model_info("llm", short, f"local:{cfg.LOCAL_LLM_PORT}")
+        else:
+            store.set_model_info("llm", cfg.API_MODEL, cfg.API_URL.split("//")[-1].split("/")[0])
 
         self._dashboard_runner = None
         if cfg.DASHBOARD_ENABLED:

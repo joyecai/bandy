@@ -125,12 +125,6 @@ def format_eta(seconds):
     return f"{m:.1f}分钟"
 
 
-def estimate_minutes(task, task_history):
-    """兼容旧接口，返回分钟数（向上取整）."""
-    s = estimate_seconds(task, task_history)
-    return max(1, -(-s // 60))
-
-
 def _today_output_dir():
     """返回今天的输出目录路径, 自动创建."""
     import datetime as dt
@@ -153,37 +147,37 @@ async def call_openclaw(assistant, task):
     assistant._announce(announce)
 
     start = time.time()
-    update_interval = min(max(est_s, 30), 120)
+    update_count = 0
     try:
         proc = await asyncio.create_subprocess_exec(
             "openclaw", "agent", "--agent", "main",
             "--message", full_msg, "--json", "--timeout", "600",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        assistant._child_procs.add(proc)
 
         comm_task = asyncio.create_task(proc.communicate())
-        last_update = start
-        while True:
-            done, _ = await asyncio.wait({comm_task}, timeout=15)
-            if done:
-                break
-            now = time.time()
-            elapsed = now - start
-            if elapsed > est_s * 1.2 and now - last_update >= update_interval:
-                remain_s = max(5, est_s - int(elapsed))
-                if remain_s < 0:
-                    msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}了，快好了"
-                else:
-                    msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}，预计还需{format_eta(remain_s)}"
-                print(f"🤖 {msg}", flush=True)
-                assistant._announce(msg)
-                last_update = now
-            if elapsed > 600:
-                try:
+        next_update = max(est_s * 1.5, 45)
+        try:
+            while True:
+                done, _ = await asyncio.wait({comm_task}, timeout=15)
+                if done:
+                    break
+                if not assistant.running:
                     proc.kill()
-                except Exception:
-                    pass
-                assistant._task_history.append((task, kws, cat, elapsed))
-                return "任务超时了，Bandy会在后台继续处理"
+                    return None
+                elapsed = time.time() - start
+                if elapsed >= next_update:
+                    update_count += 1
+                    msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}了，快好了"
+                    print(f"🤖 {msg}", flush=True)
+                    assistant._announce(msg)
+                    next_update = elapsed + 60
+                if elapsed > 600:
+                    proc.kill()
+                    assistant._task_history.append((task, kws, cat, elapsed))
+                    return "任务超时了，Bandy会在后台继续处理"
+        finally:
+            assistant._child_procs.discard(proc)
 
         stdout, stderr = comm_task.result()
         duration = time.time() - start
@@ -288,9 +282,11 @@ async def run_agent_bg(assistant, task):
         print(f"🔧 后台任务: {task}", flush=True)
         result = await call_openclaw(assistant, task)
         if result:
-            assistant._record("assistant", result)
             print(f"🤖 回复: {result}", flush=True)
             assistant._announce(result)
+    except asyncio.CancelledError:
+        print("🔧 后台任务已取消", flush=True)
     except Exception as e:
         print(f"❌ 后台任务错误: {e}", flush=True)
-        assistant._announce("任务执行出错了")
+        if assistant.running:
+            assistant._announce("任务执行出错了")

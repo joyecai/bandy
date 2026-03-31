@@ -16,7 +16,22 @@ def detect_lang(text):
     return 'zh' if zh >= en else 'en'
 
 
+_TOOL_CALL_RE = re.compile(
+    r'<\w*:?tool_call>[\s\S]*?</\w*:?tool_call>'
+    r'|<\w*:?tool_call>[\s\S]*'
+    r'|<invoke\b[\s\S]*?</invoke>'
+    r'|<\|plugin\|>[\s\S]*?<\|/plugin\|>'
+    r'|```tool_code[\s\S]*?```',
+    re.IGNORECASE)
+
+
+def strip_tool_calls(text):
+    """移除 LLM 返回中的 tool call / function call XML"""
+    return _TOOL_CALL_RE.sub('', text).strip()
+
+
 def strip_markdown(text):
+    text = strip_tool_calls(text)
     for pat, rep in [
         (r'```[\s\S]*?```', ''), (r'`([^`]*)`', r'\1'),
         (r'\*\*(.+?)\*\*', r'\1'), (r'\*(.+?)\*', r'\1'),

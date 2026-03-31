@@ -1,10 +1,13 @@
-faster-whisper
 edge-tts
 numpy
 scipy
 PyAudio
 aiohttp
-requests
 PyYAML
 soundfile
 opencc-python-reimplemented
+mlx
+mlx-whisper
+mlx-vlm
+mlx-audio
+huggingface_hub

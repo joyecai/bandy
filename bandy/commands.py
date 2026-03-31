@@ -11,7 +11,7 @@ from .weather import parse_weather_query, get_weather
 from .vision import is_vision_command, capture_frame, vision_query
 from .camera import (camera_nod, camera_center, camera_pan, camera_tilt,
                      camera_zoom_rel, camera_privacy, camera_mode,
-                     camera_quit, enable_ai_tracking, disable_ai_tracking)
+                     enable_ai_tracking, disable_ai_tracking)
 from .telegram import send_tg_file
 from .agent import needs_agent, run_agent_bg, _FILE_RE
 
@@ -28,8 +28,8 @@ async def process_command(assistant, text):
     has_dismiss = "退下" in text
 
     if has_dismiss:
-        assistant.conversation_mode = False
-        assistant.ai_tracking_active = False
+        assistant._kill_playback()
+        assistant._end_conversation()
         asyncio.create_task(asyncio.to_thread(assistant._dismiss_bg))
         return await assistant._reply("好的，我先退下了")
 
@@ -37,7 +37,9 @@ async def process_command(assistant, text):
         question = text.replace(cfg.WAKE_WORD_AGENT, "").strip()
         if not question:
             return await assistant._reply("在")
-        asyncio.create_task(run_agent_bg(assistant, question))
+        t = asyncio.create_task(run_agent_bg(assistant, question))
+        assistant._bg_tasks.add(t)
+        t.add_done_callback(assistant._bg_tasks.discard)
         return
 
     if is_wake_word(text):
@@ -48,6 +50,7 @@ async def process_command(assistant, text):
         else:
             assistant.conversation_mode = True
             assistant.last_command_time = now
+            assistant._session_start = now
             store.new_session()
             remainder = strip_wake_word(text)
             speak_task = asyncio.create_task(assistant._reply("在"))
@@ -142,7 +145,7 @@ async def process_command(assistant, text):
             assistant._vision_frame = frame_path
             assistant._vision_time = time.time()
             assistant._vision_history = []
-        prompt = text if len(text) > 3 else "用简洁中文描述你看到了什么"
+        prompt = text if len(text) > 5 else "请仔细观察图片中的物体，用简洁中文准确描述你看到了什么，包括物体的类型、颜色和特征"
         result = await asyncio.to_thread(
             vision_query, assistant._vision_frame, prompt,
             assistant._vision_history or None)
@@ -164,15 +167,23 @@ async def process_command(assistant, text):
     elif ("发" in text or "send" in low) and ("tg" in low or "telegram" in low):
         resp = await _handle_tg_send(assistant, text)
     elif needs_agent(text):
-        asyncio.create_task(run_agent_bg(assistant, text))
+        t = asyncio.create_task(run_agent_bg(assistant, text))
+        assistant._bg_tasks.add(t)
+        t.add_done_callback(assistant._bg_tasks.discard)
         return
 
     if resp:
         return await assistant._reply(resp)
 
     # LLM 流式
-    from .llm import call_streaming
+    from .llm import call_streaming, _TOOL_CALL_SENTINEL
     full = await call_streaming(assistant, text)
+    if full == _TOOL_CALL_SENTINEL:
+        print("🔄 LLM 返回 tool call，转给 agent 执行", flush=True)
+        t = asyncio.create_task(run_agent_bg(assistant, text))
+        assistant._bg_tasks.add(t)
+        t.add_done_callback(assistant._bg_tasks.discard)
+        return
     if full:
         assistant._record("assistant", full)
 
