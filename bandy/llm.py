@@ -248,16 +248,16 @@ async def call_streaming(assistant, prompt):
 
         async def _player():
             nonlocal aborted
-            while True:
-                item = await pipe.get()
-                if item is None:
-                    break
-                try:
-                    path = await item
-                except (Exception, asyncio.CancelledError):
-                    continue
-                import subprocess
-                async with assistant._speak_lock:
+            import subprocess, time as _t, queue as _q
+            async with assistant._speak_lock:
+                while True:
+                    item = await pipe.get()
+                    if item is None:
+                        break
+                    try:
+                        path = await item
+                    except (Exception, asyncio.CancelledError):
+                        continue
                     assistant._barge_in = False
                     assistant._is_speaking = True
                     proc = subprocess.Popen(
@@ -267,19 +267,15 @@ async def call_streaming(assistant, prompt):
                     await asyncio.to_thread(proc.wait)
                     assistant._playback_proc = None
                     assistant._is_speaking = False
-                    import time
-                    import time
                     bargein = assistant._barge_in
                     if bargein:
-                        assistant._speak_end_time = time.time() - cfg.SPEAK_COOLDOWN + 0.2
+                        assistant._speak_end_time = _t.time() - cfg.SPEAK_COOLDOWN + 0.2
                     else:
-                        assistant._speak_end_time = time.time()
+                        assistant._speak_end_time = _t.time()
                     try:
                         os.remove(path)
                     except OSError:
                         pass
-                    # flush echo from mic
-                    import queue as _q
                     while not assistant._speech_queue.empty():
                         try:
                             assistant._speech_queue.get_nowait()
