@@ -6,15 +6,12 @@ import asyncio
 import logging
 import platform
 import subprocess
-import tempfile
 import time as _time
 import datetime as _dt
 
-import edge_tts
-
 from .config import cfg
 from .utils import detect_lang, strip_markdown, to_simplified
-from .metrics import store, LlmMetric, TtsMetric
+from .metrics import store, LlmMetric
 
 logger = logging.getLogger(__name__)
 
@@ -248,19 +245,13 @@ async def call_streaming(assistant, prompt):
             json=req_body,
             timeout=aiohttp.ClientTimeout(total=60))
 
-        voice = "en-US-AriaNeural" if _ui_lang == 'en' else "zh-CN-XiaoyiNeural"
+        from . import tts as tts_mod
         pipe = asyncio.Queue()
         synth_tasks = []
         aborted = False
 
         async def _synth(text):
-            _ts = _time.time()
-            fd, p = tempfile.mkstemp(suffix='.mp3')
-            os.close(fd)
-            await edge_tts.Communicate(text, voice).save(p)
-            store.record_tts(TtsMetric(
-                text=text, char_count=len(text), synth_time=_time.time() - _ts))
-            return p
+            return await tts_mod.synthesize(text)
 
         async def _player():
             nonlocal aborted

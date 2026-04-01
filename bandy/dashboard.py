@@ -1,9 +1,8 @@
-"""Dashboard Web 服务: 独立常驻面板，管理 Bandy 生命周期"""
+"""Dashboard Web 服务: 独立常驻面板，通过 launchctl 管理 Bandy 生命周期"""
 import os
 import signal
 import asyncio
 import subprocess
-import threading
 import logging
 
 from aiohttp import web
@@ -16,96 +15,80 @@ logger = logging.getLogger(__name__)
 
 _HTML_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
 
-_assistant = None
-_assistant_thread = None
-_lock = threading.Lock()
+_VA_LABEL = "com.openclaw.voiceassistant"
 
 
-def _run_assistant():
-    global _assistant
-    local_va = None
+def _va_pid() -> int | None:
+    """通过 launchctl 获取语音助手 PID, 未运行返回 None."""
     try:
-        from .output import cleanup_old_output
-        from .assistant import VoiceAssistant
-        cleanup_old_output()
-        cfg.DASHBOARD_ENABLED = False
-        local_va = VoiceAssistant()
-        local_va.running = True
-        _assistant = local_va
-        asyncio.run(local_va.run())
-    except (KeyboardInterrupt, SystemExit):
+        out = subprocess.check_output(
+            ["launchctl", "list", _VA_LABEL], text=True, stderr=subprocess.DEVNULL,
+        )
+        for line in out.splitlines():
+            if '"PID"' in line:
+                return int(line.strip().rstrip(";").split("=")[-1].strip())
+    except (subprocess.CalledProcessError, ValueError):
         pass
-    except Exception:
-        logger.exception("Bandy 线程异常退出")
-    finally:
-        store.end_session()
-        if local_va:
-            local_va.running = False
-        with _lock:
-            if _assistant is local_va:
-                _assistant = None
+    return None
 
 
-def _do_stop():
-    """停止语音助手并等待线程真正退出"""
-    global _assistant, _assistant_thread
-    with _lock:
-        va = _assistant
-        th = _assistant_thread
-    if not va or not va.running:
+def _va_running() -> bool:
+    pid = _va_pid()
+    if pid is None:
         return False
-    if va.conversation_mode:
-        va._end_conversation()
-        va._dismiss_bg()
-    store.end_session()
-    va._shutdown()
-    if th:
-        for _ in range(30):
-            th.join(timeout=1)
-            if not th.is_alive():
-                break
-        if th.is_alive():
-            logger.warning("助手线程未在 30s 内退出")
-    with _lock:
-        if _assistant is va:
-            _assistant = None
-        _assistant_thread = None
-    logger.info("Bandy 已完全停止")
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _va_start():
+    subprocess.run(["launchctl", "start", _VA_LABEL],
+                   capture_output=True, timeout=5)
+    logger.info("已发送 launchctl start %s", _VA_LABEL)
+
+
+def _va_stop():
+    pid = _va_pid()
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+        logger.info("已发送 SIGTERM -> PID %d", pid)
+    except OSError:
+        pass
+    for _ in range(30):
+        import time; time.sleep(1)
+        if not _va_running():
+            logger.info("Bandy 已停止")
+            return True
+    logger.warning("Bandy 未在 30s 内退出")
     return True
 
 
-def _do_start():
-    """启动语音助手线程（先重新加载配置）"""
-    global _assistant_thread
-    from .config import reload as _reload_cfg
-    _reload_cfg()
-    with _lock:
-        _assistant_thread = threading.Thread(target=_run_assistant, daemon=True)
-        _assistant_thread.start()
-
-
 async def _handle_start(request):
-    if _assistant and _assistant.running:
+    if _va_running():
         return web.json_response({"ok": False, "error": "already running"})
-    await asyncio.to_thread(_do_start)
+    await asyncio.to_thread(_va_start)
     return web.json_response({"ok": True})
 
 
 async def _handle_stop(request):
-    ok = await asyncio.to_thread(_do_stop)
-    if ok:
-        return web.json_response({"ok": True})
-    return web.json_response({"ok": False, "error": "not running"})
+    if not _va_running():
+        return web.json_response({"ok": False, "error": "not running"})
+    ok = await asyncio.to_thread(_va_stop)
+    return web.json_response({"ok": ok})
 
 
 async def _handle_restart(request):
-    await asyncio.to_thread(_do_stop)
-    await asyncio.to_thread(_do_start)
+    await asyncio.to_thread(_va_stop)
+    await asyncio.to_thread(_va_start)
     return web.json_response({"ok": True})
 
 
 async def _handle_status(request):
-    running = bool(_assistant and _assistant.running)
+    running = _va_running()
     return web.json_response({"running": running})
 
 
@@ -140,10 +123,20 @@ async def _handle_index(request):
 
 
 async def _handle_metrics(request):
+    from .metrics import MetricsStore
+    data = MetricsStore.read_from_file()
+    if data is not None:
+        return web.json_response(data)
     return web.json_response(store.snapshot())
 
 
 async def _handle_clear_sessions(request):
+    from .metrics import CLEAR_FLAG
+    try:
+        with open(CLEAR_FLAG, "w") as f:
+            f.write("1")
+    except OSError:
+        pass
     store.clear_sessions()
     return web.json_response({"ok": True})
 
@@ -187,23 +180,9 @@ async def _handle_dashboard_reload(request):
     return web.json_response({"ok": True})
 
 
-def _kill_port(port: int):
-    """启动前释放被占用的端口"""
-    try:
-        out = subprocess.check_output(["lsof", "-ti", f":{port}"], text=True).strip()
-        for pid in out.split():
-            pid = pid.strip()
-            if pid and pid != str(os.getpid()):
-                os.kill(int(pid), 9)
-                logger.info("已终止占用端口 %s 的进程 (PID %s)", port, pid)
-    except (subprocess.CalledProcessError, OSError):
-        pass
-
-
 async def start_dashboard(port=None):
     if port is None:
         port = cfg.DASHBOARD_PORT
-    _kill_port(port)
     app = web.Application()
     app.router.add_get('/', _handle_index)
     app.router.add_get('/api/metrics', _handle_metrics)

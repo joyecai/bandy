@@ -54,7 +54,6 @@ class _Cfg:
         vi = data.get("vision", {})
         self.VISION_MODEL = vi.get("model", "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit")
         self.VISION_PRELOAD = vi.get("preload", False)
-        self.OLLAMA_URL = vi.get("ollama_url", "http://localhost:11434")
         self.IMAGESNAP = vi.get("imagesnap", "/opt/homebrew/bin/imagesnap")
         self.VISION_CONTEXT_TTL = vi.get("context_ttl", 60)
 
@@ -66,6 +65,10 @@ class _Cfg:
         conv = data.get("conversation", {})
         self.CONVERSATION_TTL = conv.get("ttl", 120)
         self.HISTORY_MAX = conv.get("history_max", 50)
+
+        tts = data.get("tts", {})
+        self.TTS_ENGINE = tts.get("engine", "edge")
+        self.TTS_QWEN_REPO = tts.get("qwen_repo", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
 
         px = data.get("proxy", {})
         self.PROXY_HTTP = px.get("http", "")
@@ -105,10 +108,3 @@ def _init_env(c: _Cfg):
 
 cfg = _Cfg(_load())
 _init_env(cfg)
-
-
-def reload():
-    """重新读取 config.yaml，更新全局 cfg 的所有属性"""
-    fresh = _Cfg(_load())
-    for k, v in vars(fresh).items():
-        setattr(cfg, k, v)

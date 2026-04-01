@@ -135,7 +135,17 @@ def _today_output_dir():
 
 async def call_openclaw(assistant, task):
     """带进度播报的 agent 调用."""
-    parts = [_agent_preamble(), f"当前任务: {task}"]
+    parts = [_agent_preamble()]
+
+    history = assistant._recent_history(limit=10)
+    if history:
+        ctx_lines = []
+        for h in history:
+            role = "用户" if h["role"] == "user" else "助手"
+            ctx_lines.append(f"{role}: {h['text']}")
+        parts.append("近期对话上下文（供理解用户意图参考）:\n" + "\n".join(ctx_lines))
+
+    parts.append(f"当前任务: {task}")
     full_msg = "\n\n".join(parts)
     kws = _task_kws(task)
     cat = _task_category(task)

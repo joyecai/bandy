@@ -1,6 +1,7 @@
 """视觉识别: MLX-VLM 本地推理 + imagesnap 抓帧"""
 import logging
 import os
+import re as _re
 import subprocess
 import tempfile
 import time as _time
@@ -36,6 +37,22 @@ _lock = threading.Lock()
 _loaded = False
 
 
+def _patch_quantized_vision_dtype():
+    """修复 mlx_vlm 0.4.2 bug: 4bit 量化模型 embed_tokens 权重 dtype 为 uint32,
+    导致像素值被错误转为 uint32 触发 conv2d 崩溃."""
+    import mlx.core as mx
+    try:
+        import mlx_vlm.models.minicpmo.minicpmo as mod
+        original = mod._to_mx_array
+        def _fixed_to_mx_array(value, dtype=None):
+            if dtype is not None and dtype in (mx.uint32, mx.uint16, mx.uint8):
+                dtype = mx.float16
+            return original(value, dtype)
+        mod._to_mx_array = _fixed_to_mx_array
+    except Exception:
+        pass
+
+
 def is_vision_command(text):
     low = text.lower()
     if any(ex in low for ex in _VISION_EXCLUDE):
@@ -63,6 +80,7 @@ def _ensure_loaded():
         t0 = _time.time()
         _model, _processor = load(repo)
         _config = _model.config if hasattr(_model, 'config') else None
+        _patch_quantized_vision_dtype()
         _loaded = True
         print(f"👁️ 视觉模型就绪 ({_time.time() - t0:.1f}s)", flush=True)
 
@@ -101,8 +119,6 @@ def capture_frame():
         pass
     return None
 
-
-import re as _re
 
 _CONV_MARKER = _re.compile(
     r'\n\s*(Human|User|Assistant|A:|Q:|H:|请告诉|如果您有|祝您)',

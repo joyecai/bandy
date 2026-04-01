@@ -38,7 +38,7 @@ async def main():
     port = cfg.DASHBOARD_PORT
     _kill_port(port)
 
-    import time; time.sleep(0.5)
+    await asyncio.sleep(0.5)
 
     runner = await start_dashboard(port)
 

@@ -19,20 +19,12 @@ _RE_PARAMS_M = re.compile(r"(\d+)\s*[Mm](?!ini|ax|od|LP|CP)", re.I)
 _RE_QUANT = re.compile(r"(qat[- ]?4bit|4bit|8bit|bf16|fp16|fp32|int8|int4)", re.I)
 
 _MODEL_META = {
-    # ── STT (MLX) ──
+    # ── STT (MLX Whisper) ──
     "mlx-community/whisper-small-mlx": {
-        "params": "244M", "quant": "FP16", "desc_zh": "Whisper small MLX, 均衡之选 (默认)", "desc_en": "Whisper small MLX, balanced (default)",
-        "speed_zh": "1s音频≈0.06s", "speed_en": "1s audio≈0.06s",
+        "params": "244M", "quant": "FP16", "desc_zh": "Whisper small MLX (默认)", "desc_en": "Whisper small MLX (default)",
+        "speed_zh": "实测: 5s音频≈0.17s (速比30x)", "speed_en": "bench: 5s audio≈0.17s (30x)",
     },
-    "mlx-community/whisper-large-v3-turbo": {
-        "params": "809M", "quant": "FP16", "desc_zh": "MLX whisper turbo, 速度精度兼顾", "desc_en": "MLX whisper turbo, speed+accuracy",
-        "speed_zh": "1s音频≈0.2s", "speed_en": "1s audio≈0.2s",
-    },
-    "mlx-community/whisper-large-v3-mlx": {
-        "params": "1.5B", "quant": "FP16", "desc_zh": "MLX whisper large-v3, 高精度", "desc_en": "MLX whisper large-v3, high accuracy",
-        "speed_zh": "1s音频≈0.5s", "speed_en": "1s audio≈0.5s",
-    },
-    # ── LLM (本地) ── 2B 以下推荐标 ★
+    # ── LLM (本地 MLX) ──
     "mlx-community/Qwen3-0.6B-4bit": {
         "params": "0.6B", "quant": "4bit", "desc_zh": "★ 极速, 335MB, 适合简短对话", "desc_en": "★ Ultra-fast, 335MB, short chat",
         "speed_zh": "≈220 tok/s", "speed_en": "≈220 tok/s",
@@ -45,63 +37,26 @@ _MODEL_META = {
         "params": "1.7B", "quant": "8bit", "desc_zh": "★ 更高精度, 中文质量更好", "desc_en": "★ Higher precision, better Chinese",
         "speed_zh": "≈80 tok/s", "speed_en": "≈80 tok/s",
     },
-    "mlx-community/Youtu-LLM-2B": {
-        "params": "1.96B", "quant": "BF16", "desc_zh": "★ 128K上下文, 推理能力强", "desc_en": "★ 128K ctx, strong reasoning",
-        "speed_zh": "≈200 tok/s (4bit)", "speed_en": "≈200 tok/s (4bit)",
+    "mlx-community/Qwen3.5-4B-4bit": {
+        "params": "4B", "quant": "4bit", "desc_zh": "Qwen3.5 4B, 最新小模型", "desc_en": "Qwen3.5 4B, latest small model",
+        "speed_zh": "实测: ≈24-34 tok/s", "speed_en": "bench: ≈24-34 tok/s",
     },
-    "mlx-community/SmolLM2-1.7B-Instruct-4bit": {
-        "params": "1.7B", "quant": "4bit", "desc_zh": "★ 轻量指令模型, 中文较弱", "desc_en": "★ Multilingual light instruct",
-        "speed_zh": "≈110 tok/s", "speed_en": "≈110 tok/s", "en_only": True,
-    },
-    # ── LLM (本地) ── 2B+
     "mlx-community/gemma-3-4b-it-qat-4bit": {
         "params": "4B", "quant": "QAT-4bit", "desc_zh": "Gemma 3 4B, 轻量对话", "desc_en": "Gemma 3 4B, lightweight chat",
         "speed_zh": "≈25 tok/s", "speed_en": "≈25 tok/s",
-    },
-    "mlx-community/gemma-3-12b-it-4bit": {
-        "params": "12B", "quant": "4bit", "desc_zh": "Gemma 3 12B, 强推理能力", "desc_en": "Gemma 3 12B, strong reasoning",
-        "speed_zh": "≈12 tok/s", "speed_en": "≈12 tok/s",
-    },
-    "mlx-community/gemma-3n-E4B-it-lm-4bit": {
-        "params": "4B(E)", "quant": "4bit", "desc_zh": "Gemma 3n E4B, 高效推理", "desc_en": "Gemma 3n E4B, efficient",
-        "speed_zh": "≈22 tok/s", "speed_en": "≈22 tok/s",
-    },
-    "Qwen/Qwen2.5-3B": {
-        "params": "3B", "quant": "FP16", "desc_zh": "Qwen2.5 3B, 全精度基座", "desc_en": "Qwen2.5 3B, full precision base",
-        "speed_zh": "≈15 tok/s", "speed_en": "≈15 tok/s",
-    },
-    "Qwen/Qwen3-8B": {
-        "params": "8B", "quant": "FP16", "desc_zh": "Qwen3 8B, 全精度, 高质量", "desc_en": "Qwen3 8B, full precision, high quality",
-        "speed_zh": "≈6 tok/s", "speed_en": "≈6 tok/s",
     },
     "mlx-community/Qwen3-14B-4bit": {
         "params": "14B", "quant": "4bit", "desc_zh": "Qwen3 14B, 量化版, 强能力", "desc_en": "Qwen3 14B, quantized, powerful",
         "speed_zh": "≈8 tok/s", "speed_en": "≈8 tok/s",
     },
-    "mlx-community/Qwen3.5-4B-4bit": {
-        "params": "4B", "quant": "4bit", "desc_zh": "Qwen3.5 4B, 最新小模型", "desc_en": "Qwen3.5 4B, latest small model",
-        "speed_zh": "≈28 tok/s", "speed_en": "≈28 tok/s",
-    },
     # ── TTS ──
-    "hexgrad/Kokoro-82M-v1.1-zh": {
-        "params": "82M", "quant": "FP32", "desc_zh": "Kokoro 中文版, 轻量高质", "desc_en": "Kokoro Chinese, light & quality",
-        "speed_zh": "10字≈0.3s", "speed_en": "10chars≈0.3s",
+    "edge-tts": {
+        "params": "云端", "quant": "", "desc_zh": "Edge TTS 微软云端, 中文自然流畅", "desc_en": "Edge TTS Microsoft cloud",
+        "speed_zh": "实测: ≈13字/s (含网络)", "speed_en": "bench: ≈13 chars/s (incl. network)",
     },
-    "mlx-community/Kokoro-82M-bf16": {
-        "params": "82M", "quant": "BF16", "desc_zh": "Kokoro MLX, 仅英文", "desc_en": "Kokoro MLX, English/multi-lang",
-        "speed_zh": "10字≈0.3s", "speed_en": "10chars≈0.3s", "en_only": True,
-    },
-    "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit": {
-        "params": "0.6B", "quant": "8bit", "desc_zh": "Qwen3 TTS Base, MLX原生", "desc_en": "Qwen3 TTS Base, MLX native",
-        "speed_zh": "10字≈1.1s", "speed_en": "10chars≈1.1s",
-    },
-    "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit": {
-        "params": "0.6B", "quant": "8bit", "desc_zh": "Qwen3 TTS 自定义音色, MLX原生", "desc_en": "Qwen3 TTS CustomVoice, MLX native",
-        "speed_zh": "10字≈1.1s", "speed_en": "10chars≈1.1s",
-    },
-    "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit": {
-        "params": "1.7B", "quant": "8bit", "desc_zh": "Qwen3 TTS 大模型, 更高质量", "desc_en": "Qwen3 TTS large, higher quality",
-        "speed_zh": "10字≈2s", "speed_en": "10chars≈2s",
+    "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit": {
+        "params": "0.6B", "quant": "4bit", "desc_zh": "★ Qwen3-TTS 本地 MLX, 极速中文", "desc_en": "★ Qwen3-TTS local MLX, fast Chinese",
+        "speed_zh": "实测: ≈9-12字/s (RTF 2.9x)", "speed_en": "bench: ≈9-12 chars/s (RTF 2.9x)",
     },
     # ── Vision ──
     "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit": {
@@ -127,7 +82,8 @@ _MODEL_META = {
 }
 
 
-def _human_size(path):
+def _dir_size(path):
+    """遍历目录返回 (人类可读字符串, MB 浮点数)."""
     total = 0
     for root, _dirs, files in os.walk(path):
         for f in files:
@@ -136,23 +92,14 @@ def _human_size(path):
                 total += os.path.getsize(fp)
             except OSError:
                 pass
+    mb = total / (1024 ** 2)
     if total < 1024 ** 2:
-        return f"{total / 1024:.0f}K"
-    if total < 1024 ** 3:
-        return f"{total / 1024 ** 2:.0f}M"
-    return f"{total / 1024 ** 3:.1f}G"
-
-
-def _size_mb(path):
-    total = 0
-    for root, _dirs, files in os.walk(path):
-        for f in files:
-            fp = os.path.join(root, f)
-            try:
-                total += os.path.getsize(fp)
-            except OSError:
-                pass
-    return total / (1024 ** 2)
+        human = f"{total / 1024:.0f}K"
+    elif total < 1024 ** 3:
+        human = f"{mb:.0f}M"
+    else:
+        human = f"{total / 1024 ** 3:.1f}G"
+    return human, mb
 
 
 def _classify(repo: str) -> str:
@@ -191,7 +138,7 @@ def scan_models() -> dict:
     seen_repos = set()
 
     if os.path.isdir(_HF_CACHE):
-        skip = {"pvad", "spkrec", "gguf"}
+        skip = {"pvad", "spkrec", "gguf", "s3tokenizer"}
         for entry in sorted(os.listdir(_HF_CACHE)):
             if not entry.startswith("models--"):
                 continue
@@ -202,8 +149,8 @@ def scan_models() -> dict:
 
             full_path = os.path.join(_HF_CACHE, entry)
             cat = _classify(repo)
-            size = _human_size(full_path)
-            mb = round(_size_mb(full_path), 1)
+            size, mb = _dir_size(full_path)
+            mb = round(mb, 1)
             short = repo.split("/")[-1]
             meta = _extract_meta(repo, short)
             result[cat].append({
@@ -213,21 +160,30 @@ def scan_models() -> dict:
             seen_repos.add(repo)
 
     for key, meta in _MODEL_META.items():
-        if key.startswith("/") and os.path.isdir(key) and key not in seen_repos:
+        if key in seen_repos:
+            continue
+        if key.startswith("/") and os.path.isdir(key):
             short = os.path.basename(key)
             cat = _classify(short)
-            size = _human_size(key)
-            mb = round(_size_mb(key), 1)
-            result[cat].append({
-                "repo": key, "size": size, "size_mb": mb, "short": short,
-                "params": meta.get("params", ""),
-                "quant": meta.get("quant", ""),
-                "desc_zh": meta.get("desc_zh", ""),
-                "desc_en": meta.get("desc_en", ""),
-                "speed_zh": meta.get("speed_zh", ""),
-                "speed_en": meta.get("speed_en", ""),
-                "en_only": meta.get("en_only", False),
-            })
+            size, mb = _dir_size(key)
+            mb = round(mb, 1)
+        elif not key.startswith("/") and "/" not in key:
+            cat = _classify(key)
+            short = key
+            size = "-"
+            mb = 0
+        else:
+            continue
+        result[cat].append({
+            "repo": key, "size": size, "size_mb": mb, "short": short,
+            "params": meta.get("params", ""),
+            "quant": meta.get("quant", ""),
+            "desc_zh": meta.get("desc_zh", ""),
+            "desc_en": meta.get("desc_en", ""),
+            "speed_zh": meta.get("speed_zh", ""),
+            "speed_en": meta.get("speed_en", ""),
+            "en_only": meta.get("en_only", False),
+        })
 
     return result
 
@@ -245,9 +201,11 @@ def current_selection() -> dict:
 
     stt_sel = wh.get("model", "mlx-community/whisper-small-mlx")
 
-    tts_sel = "edge-tts"
-    if tts_cfg.get("engine") == "local" or tts_cfg.get("engine") == "qwen3":
-        tts_sel = tts_cfg.get("repo", tts_cfg.get("qwen3", {}).get("repo", "edge-tts"))
+    tts_engine = tts_cfg.get("engine", "edge")
+    if tts_engine == "qwen":
+        tts_sel = tts_cfg.get("qwen_repo", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
+    else:
+        tts_sel = "edge-tts"
 
     return {
         "stt": stt_sel,
@@ -276,9 +234,11 @@ def save_selection(category: str, repo: str) -> bool:
     elif category == "tts":
         if repo == "edge-tts":
             data.setdefault("tts", {})["engine"] = "edge"
+        elif "tts" in repo.lower():
+            data.setdefault("tts", {})["engine"] = "qwen"
+            data["tts"]["qwen_repo"] = repo
         else:
-            data.setdefault("tts", {})["engine"] = "local"
-            data["tts"]["repo"] = repo
+            return False
     elif category == "vision":
         data.setdefault("vision", {})["model"] = repo
     else:

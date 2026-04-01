@@ -34,7 +34,12 @@ async def process_command(assistant, text):
         return await assistant._reply("好的，我先退下了")
 
     if cfg.WAKE_WORD_AGENT in text:
-        question = text.replace(cfg.WAKE_WORD_AGENT, "").strip()
+        import re
+        _aw = re.escape(cfg.WAKE_WORD_AGENT)
+        question = re.sub(
+            rf'(?:你)?(?:让|叫|问|跟|告诉|请)?{_aw}\s*', '', text
+        ).strip()
+        question = re.sub(r'^(?:去|来|帮我|帮忙)\s*', '', question).strip()
         if not question:
             return await assistant._reply("在")
         t = asyncio.create_task(run_agent_bg(assistant, question))

@@ -432,8 +432,15 @@ class VoiceAssistant:
 
         self._dashboard_runner = None
         if cfg.DASHBOARD_ENABLED:
-            from .dashboard import start_dashboard
-            self._dashboard_runner = await start_dashboard()
+            import socket, logging
+            _log = logging.getLogger(__name__)
+            port = cfg.DASHBOARD_PORT
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
+                if _s.connect_ex(("127.0.0.1", port)) == 0:
+                    _log.info("Dashboard 已在端口 %d 运行 (独立进程), 跳过内置启动", port)
+                else:
+                    from .dashboard import start_dashboard
+                    self._dashboard_runner = await start_dashboard(port)
 
         self._tg_bot_task = None
         if cfg.TG_BOT_TOKEN and cfg.TG_BOT_ENABLED:
@@ -449,6 +456,8 @@ class VoiceAssistant:
 
         threading.Thread(target=self._capture_loop, daemon=True).start()
 
+        _metrics_tick = 0
+
         try:
             while self.running:
                 try:
@@ -457,11 +466,17 @@ class VoiceAssistant:
                     except queue.Empty:
                         await self._drain_announces()
                         self._check_timeout()
+                        _metrics_tick += 1
+                        if _metrics_tick >= 3:
+                            _metrics_tick = 0
+                            store.check_clear_flag()
+                            store.dump_to_file()
                         continue
 
                     text = await asyncio.to_thread(stt_mod.recognize, self.whisper_model, audio)
                     if text:
                         await process_command(self, text)
+                        store.dump_to_file()
 
                     await self._drain_announces()
                     self._check_timeout()

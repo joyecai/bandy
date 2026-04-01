@@ -33,13 +33,17 @@ async def send_tg_file(file_path, caption=""):
             fname = base + _TG_EXT_REMAP[ext.lower()]
         data = aiohttp.FormData()
         data.add_field("chat_id", cfg.TG_CHAT_ID)
-        data.add_field("document", open(file_path, "rb"), filename=fname)
-        if caption:
-            data.add_field("caption", caption)
-        async with aiohttp.ClientSession() as s:
-            async with s.post(url, data=data,
-                              timeout=aiohttp.ClientTimeout(total=60)) as r:
-                return (await r.json()).get("ok", False)
+        fp = open(file_path, "rb")
+        try:
+            data.add_field("document", fp, filename=fname)
+            if caption:
+                data.add_field("caption", caption)
+            async with aiohttp.ClientSession() as s:
+                async with s.post(url, data=data,
+                                  timeout=aiohttp.ClientTimeout(total=60)) as r:
+                    return (await r.json()).get("ok", False)
+        finally:
+            fp.close()
     except Exception as e:
         print(f"⚠️ TG 文件发送失败: {e}", flush=True)
         return False

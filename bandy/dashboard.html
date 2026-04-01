@@ -307,9 +307,12 @@ function _renderCard(h,cat,label,items,sel,showSub,editable){
   if(editable)h+=`<button class="edit-btn" onclick="event.stopPropagation();openPromptEditor('${cat}')" title="${_lang==='zh'?'编辑系统提示词':'Edit system prompt'}">&#9998;</button>`;
   if(active){
     const nm=_shortName(active);const qt=active.quant||_quantTag(nm);
+    const isCloud=active.params==='云端'||active.params==='Cloud';
     h+=`<div class="cur-model"><span class="cur-name">${esc(nm)}</span>`;
-    if(qt)h+=`<span class="tag quant">${esc(qt)}</span>`;
-    h+=`<span class="tag size">${active.size}</span></div>`;
+    if(isCloud)h+=`<span class="tag cloud">${t('cloud')}</span>`;
+    else if(qt)h+=`<span class="tag quant">${esc(qt)}</span>`;
+    if(active.size&&active.size!=='-')h+=`<span class="tag size">${active.size}</span>`;
+    h+=`</div>`;
     const spd=_lang==='zh'?active.speed_zh:active.speed_en;
     if(spd)h+=`<div class="cur-meta">${esc(spd)}</div>`;
   } else if(showSub){
@@ -379,13 +382,6 @@ function renderPickerList(){
     return;
   }
 
-  if(cat==='tts'){
-    const isEdge=sel.tts==='edge-tts';
-    h+=_pickerItem({repo:'edge-tts',short:'Edge TTS',params:'',quant:'',size:'',
-      desc_zh:'微软云端TTS, 零本地资源',desc_en:'Microsoft cloud TTS, zero local resources',
-      speed_zh:'',speed_en:'',_cloud:true},isEdge,'tts');
-  }
-
   const items=av[cat]||[];
   for(const it of items){
     if(_lang==='zh'&&it.en_only)continue;
@@ -400,8 +396,9 @@ function _pickerItem(it,active,cat){
   const desc=_lang==='zh'?(it.desc_zh||''):(it.desc_en||'');
   const spd=_lang==='zh'?(it.speed_zh||''):(it.speed_en||'');
   let tags='';
-  if(it._cloud)tags+=`<span class="tag cloud">${t('cloud')}</span>`;
-  if(it.params)tags+=`<span class="tag quant">${esc(it.params)}</span>`;
+  const isCloud=it._cloud||it.params==='云端'||it.params==='Cloud';
+  if(isCloud)tags+=`<span class="tag cloud">${t('cloud')}</span>`;
+  if(it.params&&!isCloud)tags+=`<span class="tag quant">${esc(it.params)}</span>`;
   if(it.quant)tags+=`<span class="tag size">${esc(it.quant)}</span>`;
   return `<div class="${cls}" onclick="pickModel('${cat}','${repoEsc}',this)">
     <div class="radio">${active?'✓':''}</div>

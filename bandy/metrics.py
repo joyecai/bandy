@@ -1,8 +1,13 @@
 """指标采集: 记录对话会话、各模型吞吐速度"""
+import json
+import os
 import time
 import threading
 from dataclasses import dataclass, field
 from typing import Optional
+
+METRICS_FILE = os.path.expanduser("~/.openclaw/metrics.json")
+CLEAR_FLAG = os.path.expanduser("~/.openclaw/metrics_clear")
 
 
 @dataclass
@@ -266,6 +271,37 @@ class MetricsStore:
             "prompt": m.prompt[:40], "result": m.result[:60],
             "proc_time": round(m.process_time, 2), "ts": m.timestamp,
         }
+
+    # ── 文件级 IPC: VA 写文件, 独立面板读 ──
+
+    def dump_to_file(self):
+        """将当前快照写入共享文件, 供独立面板进程读取."""
+        try:
+            tmp = METRICS_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.snapshot(), f, ensure_ascii=False)
+            os.replace(tmp, METRICS_FILE)
+        except Exception:
+            pass
+
+    def check_clear_flag(self):
+        """检查面板发出的清除信号, 若有则清除本地数据."""
+        if os.path.exists(CLEAR_FLAG):
+            try:
+                os.remove(CLEAR_FLAG)
+            except OSError:
+                pass
+            self.clear_sessions()
+            self.dump_to_file()
+
+    @staticmethod
+    def read_from_file() -> dict | None:
+        """从共享文件读取指标 (面板进程调用)."""
+        try:
+            with open(METRICS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
 
 
 store = MetricsStore()

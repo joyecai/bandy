@@ -3,6 +3,28 @@ api:
   key: "your-api-key"
   model: "your-model-name"
 
+agent:
+  model: "minimax/minimax-m2.5"
+  provider: "your-provider"
+
+local_llm:
+  repo: "mlx-community/Qwen3-1.7B-4bit"
+  server_host: "127.0.0.1"
+  server_port: 8766
+
+whisper:
+  model: "mlx-community/whisper-small-mlx"
+
+tts:
+  engine: edge
+  qwen_repo: "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+
+vision:
+  model: "/Users/you/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit"
+  preload: false
+  imagesnap: "/opt/homebrew/bin/imagesnap"
+  context_ttl: 60
+
 telegram:
   bot_token: "your-telegram-bot-token"
   chat_id: "your-chat-id"
@@ -19,18 +41,7 @@ audio:
   max_record_sec: 10
   noise_cal_sec: 1.0
   speak_cooldown: 0.5
-  playback_speed: 1.1
-
-whisper:
-  model: "small"
-  device: "auto"
-  compute_type: "int8"
-
-vision:
-  model: "minicpm-v"
-  ollama_url: "http://localhost:11434"
-  imagesnap: "/opt/homebrew/bin/imagesnap"
-  context_ttl: 60
+  playback_speed: "1.1"
 
 camera:
   link_ctl: "/opt/homebrew/bin/link-ctl"
@@ -39,12 +50,11 @@ camera:
 
 conversation:
   ttl: 120
-  history_ttl: 10800
   history_max: 50
 
 proxy:
-  http: "http://127.0.0.1:7890"
-  https: "http://127.0.0.1:7890"
+  http: ""
+  https: ""
 
 paths:
   extra:
