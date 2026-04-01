@@ -88,6 +88,13 @@ class _Cfg:
         self.WAKE_WORD_AGENT = data.get("wake_word", {}).get("agent", "龙虾")
         self.LOCATION_OVERRIDE = data.get("location_override", "")
 
+        self.SYSTEM_PROMPT_ZH = data.get("system_prompt", "")
+        self.SYSTEM_PROMPT_EN = data.get("system_prompt_en", "")
+
+        ag = data.get("agent", {})
+        self.AGENT_PROMPT_ZH = ag.get("system_prompt", "")
+        self.AGENT_PROMPT_EN = ag.get("system_prompt_en", "")
+
         self.PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 
     @property

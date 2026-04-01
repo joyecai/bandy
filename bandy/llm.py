@@ -179,6 +179,18 @@ def get_env_context() -> dict:
     return {"zh": zh, "en": en}
 
 
+_DEFAULT_PROMPT_ZH = (
+    "你是Bandy，运行在用户Mac上的语音助手，用户通过语音和你交流，你的回答会被TTS朗读出来。"
+    "要求：1.用纯文本回复，禁止Markdown。2.简洁口语化，1到3句话。3.不加括号说明。4.用中文回复。"
+    "5.禁止使用任何emoji、图标、特殊符号字符。6.数字中的小数点读作'点'，例如2.5读作2点5。"
+)
+_DEFAULT_PROMPT_EN = (
+    "You are Bandy, a voice assistant on the user's Mac. Your reply is read aloud by TTS. "
+    "Rules: plain text only, no Markdown, no emoji or icon characters, "
+    "concise conversational style, 1-3 sentences, reply in English."
+)
+
+
 def _build_prompt():
     """每次调用动态生成系统提示词（含实时时间 + 实时模型）"""
     now = _dt.datetime.now()
@@ -189,20 +201,15 @@ def _build_prompt():
     hw_en = f"{_hw_context_en}\n{models_en}" if _hw_context_en else models_en
     env_zh = f"\n{time_zh}\n{hw_zh}"
     env_en = f"\n{time_en}\n{hw_en}"
-    zh = (
-        "你是Bandy，运行在用户Mac上的语音助手，用户通过语音和你交流，你的回答会被TTS朗读出来。"
-        f"你的云端大模型是{cfg.API_MODEL}。"
-        "要求：1.用纯文本回复，禁止Markdown。2.简洁口语化，1到3句话。3.不加括号说明。4.用中文回复。"
-        "5.禁止使用任何emoji、图标、特殊符号字符。6.数字中的小数点读作'点'，例如2.5读作2点5。"
-        f"\n\n[系统环境]{env_zh}"
-    )
-    en = (
-        "You are Bandy, a voice assistant on the user's Mac. Your reply is read aloud by TTS. "
-        f"Your cloud LLM is {cfg.API_MODEL}. "
-        "Rules: plain text only, no Markdown, no emoji or icon characters, "
-        "concise conversational style, 1-3 sentences, reply in English."
-        f"\n\n[System Environment]{env_en}"
-    )
+    use_local = cfg.LLM_PROVIDER == "local" and cfg.LOCAL_LLM_REPO
+    if use_local:
+        user_zh = cfg.SYSTEM_PROMPT_ZH or _DEFAULT_PROMPT_ZH
+        user_en = cfg.SYSTEM_PROMPT_EN or _DEFAULT_PROMPT_EN
+    else:
+        user_zh = cfg.AGENT_PROMPT_ZH or _DEFAULT_PROMPT_ZH
+        user_en = cfg.AGENT_PROMPT_EN or _DEFAULT_PROMPT_EN
+    zh = f"{user_zh}\n\n[系统环境]{env_zh}"
+    en = f"{user_en}\n\n[System Environment]{env_en}"
     return zh, en
 
 _SENT_BREAK = re.compile(r'[。！？!?\n]|\.(?!\d)')

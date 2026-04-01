@@ -1,39 +1,68 @@
-# Bandy — Mac 本地语音助手
+<p align="center">
+  <h1 align="center">Bandy</h1>
+  <p align="center">
+    <strong>Local Voice Assistant for Apple Silicon Mac</strong><br>
+    在 Apple Silicon Mac 上运行的本地语音助手
+  </p>
+  <p align="center">
+    <a href="#quick-start">Quick Start</a> · <a href="#快速开始">快速开始</a> · <a href="https://github.com/joyecai/bandy/releases">Releases</a>
+  </p>
+</p>
 
-Bandy 是一个运行在 Apple Silicon Mac 上的全双工语音助手，所有核心推理（STT / LLM / TTS / Vision）均在本地 MLX 加速完成，无需云端依赖即可使用。
+---
 
-## 特性
+Bandy is a **full-duplex voice assistant** that runs entirely on your Apple Silicon Mac. All core inference — STT, LLM, TTS, and Vision — is accelerated locally via [MLX](https://github.com/ml-explore/mlx), with **no cloud dependency required**.
 
-- **全双工对话** — 语音随时打断，无需等待回复结束
-- **本地 MLX 推理** — Whisper STT、Qwen3 LLM、Qwen3-TTS / Kokoro TTS、MiniCPM-o Vision 全部本地运行
-- **Web Dashboard** — 实时监控、模型切换、TTS 音色选择、提示词编辑
-- **OpenClaw Agent** — 云端大模型执行复杂任务（可选）
-- **Telegram 集成** — 远程语音/文字指令、文件推送（可选）
-- **摄像头控制** — Insta360 Link AI 追踪、云台控制（可选）
-- **中英双语** — Dashboard 语言切换，助手自动跟随
+Bandy 是一个运行在 Apple Silicon Mac 上的**全双工语音助手**，所有核心推理（STT / LLM / TTS / Vision）均通过 [MLX](https://github.com/ml-explore/mlx) 在本地加速完成，**无需云端依赖**即可使用。
 
-## 系统要求
+## Features / 特性
 
-| 项目 | 要求 |
-|------|------|
-| macOS | 13.0+ |
-| 芯片 | Apple Silicon (M1/M2/M3/M4) |
-| 内存 | 8GB 最低, 16GB+ 推荐 |
+| | English | 中文 |
+|--|---------|------|
+| Full-Duplex | Interrupt anytime — no waiting for reply to finish | 语音随时打断，无需等待回复结束 |
+| Local MLX | Whisper STT, Qwen3 LLM, Qwen3-TTS / Kokoro TTS, MiniCPM-o Vision | Whisper STT、Qwen3 LLM、Qwen3-TTS / Kokoro TTS、MiniCPM-o Vision 全部本地运行 |
+| Web Dashboard | Real-time monitoring, model switching, TTS voice selection, prompt editing | 实时监控、模型切换、TTS 音色选择、系统提示词编辑 |
+| Cloud Agent | Optional cloud LLM for complex tasks (OpenClaw Agent) | 云端大模型执行复杂任务（可选） |
+| Telegram | Remote voice/text commands, file push | 远程语音/文字指令、文件推送（可选） |
+| Camera | Insta360 Link AI tracking & gimbal control | Insta360 Link AI 追踪、云台控制（可选） |
+| Bilingual | Dashboard & assistant in Chinese or English | Dashboard 语言切换，助手自动跟随 |
+
+## System Requirements / 系统要求
+
+| | Requirement / 要求 |
+|--|---------------------|
+| macOS | 13.0+ (Ventura or later) |
+| Chip / 芯片 | Apple Silicon (M1 / M2 / M3 / M4) |
+| RAM / 内存 | 8 GB min, 16 GB+ recommended |
 | Python | 3.10+ |
-| Homebrew | 推荐安装 |
+| Homebrew | Recommended / 推荐安装 |
 
-## 快速开始
-
-### 1. 克隆项目
+## Quick Start
 
 ```bash
 git clone https://github.com/joyecai/bandy.git
 cd bandy
+python3 install.py
 ```
 
-### 2. 运行安装引导
+The guided installer will walk you through:
+
+| Step | Description | Required? |
+|------|-------------|-----------|
+| System Check | Verify macOS / Apple Silicon / Python | Yes |
+| Install Deps | pip install + brew install ffmpeg, imagesnap | Yes |
+| Configure | API Key / Telegram / Proxy (all skippable) | Optional |
+| Download Models | Whisper small + Qwen3-1.7B (minimal set) | Optional |
+| System Service | Register LaunchAgent (Dashboard auto-start) | Yes |
+| Desktop Shortcut | Create `Bandy.app` on Desktop | Yes |
+
+Then double-click **Bandy.app** on your desktop to open the Dashboard, click **Start**, and say **"Bandy"** to wake it up.
+
+## 快速开始
 
 ```bash
+git clone https://github.com/joyecai/bandy.git
+cd bandy
 python3 install.py
 ```
 
@@ -43,136 +72,119 @@ python3 install.py
 |------|------|----------|
 | 系统检查 | 验证 macOS / Apple Silicon / Python 版本 | 是 |
 | 安装依赖 | pip 安装 + brew 安装 ffmpeg / imagesnap | 是 |
-| 配置 | API Key / Telegram / 代理 等 | 可跳过 |
-| 下载模型 | Whisper small + Qwen3-1.7B (默认最小集) | 可跳过 |
-| 系统服务 | 注册 LaunchAgent (Dashboard 开机自启) | 是 |
+| 配置 | API Key / Telegram / 代理 等（可跳过） | 可选 |
+| 下载模型 | Whisper small + Qwen3-1.7B（默认最小集） | 可选 |
+| 系统服务 | 注册 LaunchAgent（Dashboard 开机自启） | 是 |
 | 桌面快捷方式 | 生成 `Bandy.app` 到桌面 | 是 |
 
-### 3. 打开 Dashboard
+双击桌面 **Bandy.app** 打开 Dashboard，点击 **启动**，对着麦克风说 **"Bandy"** 唤醒。
 
-双击桌面 **Bandy.app**，默认浏览器会打开 Dashboard：
+## Models / 可选模型
 
-```
-http://localhost:8765
-```
+All models can be switched in the Dashboard. 所有模型可在 Dashboard 中一键切换：
 
-### 4. 下载模型（如安装时跳过）
+| Category | Model | Size | Note |
+|----------|-------|------|------|
+| STT | whisper-small-mlx | 290 MB | Default, ~30x real-time |
+| LLM | Qwen3-1.7B-4bit | 1.1 GB | Recommended — best speed/quality balance |
+| LLM | Qwen3-0.6B-4bit | 335 MB | Ultra-fast, short conversations |
+| TTS | Edge TTS | Cloud | Default, fluent Chinese |
+| TTS | Kokoro-82M | 82 MB | Ultra-fast local, English only |
+| TTS | Qwen3-TTS-CustomVoice | 3.7 GB | 9 voices, voice cloning |
+| Vision | MiniCPM-o-4.5 | 4.0 GB | Default vision model |
 
-在 Dashboard 中点击任意模型卡片，未下载的模型会显示 **下载** 按钮，点击即可在线下载。
+## Configuration / 配置
 
-### 5. 启动 Bandy
+`config.yaml` is auto-generated during installation. You can also edit it manually or via the Dashboard prompt editor:
 
-在 Dashboard 左上角点击 **启动** 按钮，等待模型加载完成后：
-
-- 对着麦克风说 **"Bandy"** 唤醒
-- 语音对话，随时说话可打断
-- 说 **"退下"** 结束对话
-
-## 项目结构
-
-```
-bandy/
-├── install.py              # 安装引导脚本
-├── main.py                 # 语音助手入口
-├── serve.py                # Dashboard 独立服务入口
-├── config.yaml.example     # 配置模板
-├── requirements.txt        # Python 依赖
-├── bandy/
-│   ├── assistant.py        # 语音助手主循环 (VAD/录音/播放)
-│   ├── commands.py         # 指令路由 (摄像头/天气/报时/视觉)
-│   ├── llm.py              # LLM 调用 (本地 MLX / 云端 API)
-│   ├── tts.py              # TTS 合成 (Edge / Kokoro / Qwen3-TTS)
-│   ├── stt.py              # Whisper 语音识别
-│   ├── vision.py           # MLX-VLM 视觉识别
-│   ├── agent.py            # OpenClaw Agent 复杂任务
-│   ├── dashboard.py        # Dashboard Web API
-│   ├── dashboard.html      # Dashboard 前端
-│   ├── models.py           # 模型发现与管理
-│   ├── metrics.py          # 性能指标收集
-│   ├── config.py           # 配置加载
-│   ├── weather.py          # 天气查询
-│   ├── camera.py           # Insta360 摄像头控制
-│   ├── tg_bot.py           # Telegram Bot
-│   └── wake.py             # 唤醒词检测
-└── setup_permissions.sh    # macOS 权限检查脚本
-```
-
-## 配置说明
-
-`config.yaml` 在安装引导时自动生成，也可手动编辑：
+`config.yaml` 在安装引导时自动生成，也可手动编辑或通过 Dashboard 提示词编辑器修改：
 
 ```yaml
-# 云端 API (Agent 使用, 可选)
 api:
   url: "http://your-api/v1/chat/completions"
   key: "your-key"
   model: "minimax/minimax-m2.5"
 
-# 本地 LLM
 local_llm:
   repo: "mlx-community/Qwen3-1.7B-4bit"
 
-# TTS 引擎: edge (云端) 或 mlx (本地)
 tts:
-  engine: edge
+  engine: edge              # edge (cloud) or mlx (local)
   mlx_repo: "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
   mlx_voice: serena
 
-# Telegram (可选)
+# Custom system prompts (editable via Dashboard)
+system_prompt: "你是Bandy，运行在用户Mac上的语音助手..."
+system_prompt_en: "You are Bandy, a voice assistant on the user's Mac..."
+
 telegram:
   bot_token: "your-token"
   chat_id: "your-id"
 
-# 网络代理 (可选)
 proxy:
   http: "http://127.0.0.1:7890"
 ```
 
-## 可选模型
+## Project Structure / 项目结构
 
-所有模型可在 Dashboard 中一键切换：
+```
+bandy/
+├── install.py              # Guided installer / 安装引导脚本
+├── main.py                 # Voice assistant entry / 语音助手入口
+├── serve.py                # Dashboard server entry / Dashboard 服务入口
+├── config.yaml.example     # Config template / 配置模板
+├── requirements.txt        # Python dependencies
+├── bandy/
+│   ├── assistant.py        # Voice assistant main loop (VAD/recording/playback)
+│   ├── commands.py         # Command routing (camera/weather/time/vision)
+│   ├── llm.py              # LLM calls (local MLX / cloud API)
+│   ├── tts.py              # TTS synthesis (Edge / Kokoro / Qwen3-TTS)
+│   ├── stt.py              # Whisper speech recognition
+│   ├── vision.py           # MLX-VLM vision recognition
+│   ├── agent.py            # OpenClaw Agent for complex tasks
+│   ├── dashboard.py        # Dashboard Web API
+│   ├── dashboard.html      # Dashboard frontend
+│   ├── models.py           # Model discovery & management
+│   ├── metrics.py          # Performance metrics
+│   ├── config.py           # Config loader
+│   ├── weather.py          # Weather query
+│   ├── camera.py           # Insta360 camera control
+│   ├── tg_bot.py           # Telegram Bot
+│   └── wake.py             # Wake word detection
+└── setup_permissions.sh    # macOS permission check
+```
 
-| 类别 | 模型 | 大小 | 说明 |
-|------|------|------|------|
-| STT | whisper-small-mlx | 290M | 默认，速比 30x |
-| LLM | Qwen3-1.7B-4bit | 1.1G | 推荐，速度与质量最佳平衡 |
-| LLM | Qwen3-0.6B-4bit | 335M | 极速，适合简短对话 |
-| TTS | Edge TTS | 云端 | 默认，中文流畅 |
-| TTS | Kokoro-82M | 82M | 极速本地，仅英文 |
-| TTS | Qwen3-TTS-CustomVoice | 3.7G | 多音色 (9种)，语音克隆 |
-| Vision | MiniCPM-o-4.5 | 4.0G | 默认视觉模型 |
-
-## 常用命令
+## Commands / 常用命令
 
 ```bash
-# 启动/停止 Dashboard
+# Start/Stop Dashboard  启动/停止 Dashboard
 launchctl start com.openclaw.dashboard
 launchctl stop com.openclaw.dashboard
 
-# 启动/停止 Bandy (也可通过 Dashboard 操作)
+# Start/Stop Bandy (or use Dashboard)  启动/停止 Bandy
 launchctl start com.openclaw.voiceassistant
 launchctl stop com.openclaw.voiceassistant
 
-# 查看日志
+# View logs  查看日志
 tail -f ~/.openclaw/logs/voice-assistant.log
 tail -f ~/.openclaw/logs/dashboard.log
 
-# 重新运行安装引导
+# Re-run installer  重新运行安装引导
 python3 install.py
 ```
 
-## 语音指令
+## Voice Commands / 语音指令
 
-| 指令 | 说明 |
-|------|------|
-| "Bandy" | 唤醒 |
-| "退下" | 结束对话 |
-| "现在几点" | 报时 |
-| "今天天气" | 天气查询 |
-| "看看这是什么" | 视觉识别 |
-| "龙虾，帮我..." | 调用 Agent |
-| "发到 TG" | 发送文件到 Telegram |
-| 摄像头指令 | "点头" / "向左" / "放大" / "隐私" 等 |
+| Command / 指令 | Description / 说明 |
+|----------------|---------------------|
+| "Bandy" | Wake up / 唤醒 |
+| "退下" / "dismiss" | End conversation / 结束对话 |
+| "现在几点" / "what time" | Tell time / 报时 |
+| "今天天气" / "weather" | Weather query / 天气查询 |
+| "看看这是什么" / "what is this" | Vision recognition / 视觉识别 |
+| "龙虾，帮我..." / "shrimp, help me..." | Invoke Agent / 调用 Agent |
+| "发到 TG" / "send to TG" | Send to Telegram |
+| Camera commands | "点头/nod", "向左/left", "放大/zoom in", "隐私/privacy" |
 
 ## License
 
