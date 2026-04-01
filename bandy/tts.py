@@ -1,10 +1,12 @@
-"""文本转语音: 模块化引擎 (Edge TTS 云端 / Qwen3-TTS 本地 MLX) + afplay 播放"""
+"""文本转语音: 模块化引擎 (Edge TTS 云端 / 本地 MLX) + afplay 播放"""
 import os
 import asyncio
 import subprocess
 import tempfile
 import time as _time
 import logging
+
+import threading
 
 import edge_tts
 
@@ -13,35 +15,43 @@ from .metrics import store, TtsMetric
 
 log = logging.getLogger(__name__)
 
-# ── Qwen3-TTS 懒加载 ──
-_qwen_model = None
+_mlx_model = None
+_mlx_repo_loaded = None
+_mlx_gpu_lock = threading.Lock()
 
 
 def _engine() -> str:
     return getattr(cfg, "TTS_ENGINE", "edge")
 
 
-def _load_qwen():
-    global _qwen_model
-    if _qwen_model is not None:
-        return _qwen_model
+def _load_mlx():
+    """懒加载本地 MLX TTS 模型 (Qwen3-TTS / Kokoro 等均兼容)."""
+    global _mlx_model, _mlx_repo_loaded
+    repo = getattr(cfg, "TTS_MLX_REPO", "")
+    if _mlx_model is not None and _mlx_repo_loaded == repo:
+        return _mlx_model
+    if _mlx_model is not None:
+        del _mlx_model
+        _mlx_model = None
     from mlx_audio.tts.utils import load_model
-    repo = getattr(cfg, "TTS_QWEN_REPO", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
-    log.info("加载 Qwen3-TTS: %s", repo)
-    _qwen_model = load_model(repo)
-    log.info("Qwen3-TTS 就绪 (sample_rate=%d)", _qwen_model.sample_rate)
-    return _qwen_model
+    log.info("加载本地 TTS: %s", repo)
+    _mlx_model = load_model(repo)
+    _mlx_repo_loaded = repo
+    log.info("本地 TTS 就绪 (sample_rate=%d)", _mlx_model.sample_rate)
+    return _mlx_model
 
 
-def _qwen_synth(text: str) -> str:
-    """Qwen3-TTS 同步合成, 返回 wav 路径."""
+def _mlx_synth(text: str) -> str:
+    """本地 MLX TTS 同步合成, 返回 wav 路径. 使用 GPU 锁防止 Metal 并发崩溃."""
     import numpy as np
     import soundfile as sf
-    model = _load_qwen()
-    results = list(model.generate(text=text, verbose=False))
-    if not results:
-        raise RuntimeError("Qwen3-TTS 未生成音频")
-    audio_np = np.array(results[0].audio)
+    with _mlx_gpu_lock:
+        model = _load_mlx()
+        voice = getattr(cfg, "TTS_MLX_VOICE", "") or None
+        results = list(model.generate(text=text, voice=voice, verbose=False))
+        if not results:
+            raise RuntimeError("本地 TTS 未生成音频")
+        audio_np = np.array(results[0].audio)
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     sf.write(path, audio_np, model.sample_rate)
@@ -51,14 +61,18 @@ def _qwen_synth(text: str) -> str:
 async def warm_tts(cache: dict):
     """预热 TTS 引擎."""
     engine = _engine()
-    if engine == "qwen":
+    if engine == "mlx":
+        repo = getattr(cfg, "TTS_MLX_REPO", "")
+        voice = getattr(cfg, "TTS_MLX_VOICE", "")
+        print(f"🔊 TTS 引擎: mlx ({repo}, voice={voice or 'default'})", flush=True)
         try:
-            await asyncio.to_thread(_load_qwen)
-            log.info("Qwen3-TTS 预热中...")
-            await asyncio.to_thread(_qwen_synth, "在")
-            log.info("Qwen3-TTS 预热完成")
-        except Exception:
-            log.exception("Qwen3-TTS 预热失败, 回退到 Edge TTS")
+            await asyncio.to_thread(_load_mlx)
+            print("🔥 预热本地 TTS...", flush=True)
+            await asyncio.to_thread(_mlx_synth, "在")
+            print("   本地 TTS 预热完成", flush=True)
+        except Exception as e:
+            print(f"⚠️ 本地 TTS 预热失败 ({e}), 回退到 Edge TTS", flush=True)
+            log.exception("本地 TTS 预热失败, 回退到 Edge TTS")
             cfg.TTS_ENGINE = "edge"
     if _engine() == "edge":
         for txt, voice in [("在", "zh-CN-XiaoyiNeural"),
@@ -82,19 +96,30 @@ def select_voice(text):
     return "zh-CN-XiaoyiNeural"
 
 
+def _model_supports_zh() -> bool:
+    """当前 MLX TTS 模型是否支持中文."""
+    repo = (getattr(cfg, "TTS_MLX_REPO", "") or "").lower()
+    return "qwen" in repo
+
+
 async def synthesize(text, voice=None):
     """合成 TTS 音频文件, 返回路径."""
     engine = _engine()
     t0 = _time.time()
 
-    if engine == "qwen":
-        try:
-            path = await asyncio.to_thread(_qwen_synth, text)
-        except Exception:
-            log.exception("Qwen3-TTS 合成失败, 回退 Edge TTS")
+    if engine == "mlx":
+        from .utils import detect_lang
+        if not _model_supports_zh() and detect_lang(text) == "zh":
             engine = "edge"
+        else:
+            try:
+                path = await asyncio.to_thread(_mlx_synth, text)
+            except Exception as e:
+                print(f"⚠️ 本地 TTS 合成失败 ({e}), 回退 Edge TTS", flush=True)
+                log.exception("本地 TTS 合成失败, 回退 Edge TTS")
+                engine = "edge"
 
-    if engine != "qwen":
+    if engine != "mlx":
         if voice is None:
             voice = select_voice(text)
         fd, path = tempfile.mkstemp(suffix='.mp3')

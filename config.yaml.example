@@ -17,7 +17,7 @@ whisper:
 
 tts:
   engine: edge
-  qwen_repo: "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit"
+  mlx_repo: "mlx-community/Kokoro-82M-bf16"
 
 vision:
   model: "/Users/you/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit"

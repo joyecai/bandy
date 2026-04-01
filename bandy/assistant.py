@@ -256,8 +256,14 @@ class VoiceAssistant:
                         self._speech_queue.put(norm)
                     self._reset_vad(s)
 
-        stream.stop_stream()
-        stream.close()
+        try:
+            stream.stop_stream()
+        except OSError:
+            pass
+        try:
+            stream.close()
+        except OSError:
+            pass
 
     # -- TTS --
 
@@ -452,7 +458,9 @@ class VoiceAssistant:
         print("   说 'Bandy' 唤醒 | 说话可打断播放")
         print("=" * 50, flush=True)
 
-        await self.speak("语音助手已就绪")
+        from .llm import get_ui_lang
+        _ready_text = "Voice assistant is ready" if get_ui_lang() == "en" else "语音助手已就绪"
+        await self.speak(_ready_text)
 
         threading.Thread(target=self._capture_loop, daemon=True).start()
 

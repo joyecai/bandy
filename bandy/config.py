@@ -68,7 +68,8 @@ class _Cfg:
 
         tts = data.get("tts", {})
         self.TTS_ENGINE = tts.get("engine", "edge")
-        self.TTS_QWEN_REPO = tts.get("qwen_repo", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
+        self.TTS_MLX_REPO = tts.get("mlx_repo", "")
+        self.TTS_MLX_VOICE = tts.get("mlx_voice", "")
 
         px = data.get("proxy", {})
         self.PROXY_HTTP = px.get("http", "")

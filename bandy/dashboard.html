@@ -55,6 +55,23 @@ h1 .uptime{font-size:17px;color:var(--dim);font-weight:400;margin-left:auto}
   font-size:14px;padding:2px 6px;border-radius:4px;opacity:0;transition:opacity .2s}
 .mcard:hover .edit-btn{opacity:1}
 .mcard .edit-btn:hover{color:var(--accent);background:rgba(99,102,241,.1)}
+.voice-row{border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.voice-row:hover .voice-name{color:var(--accent)}
+.voice-row .voice-label{font-size:12px;color:var(--dim);flex-shrink:0}
+.voice-row .voice-name{font-size:13px;font-weight:600;color:var(--cyan);transition:color .2s}
+.voice-row .voice-arrow{font-size:11px;color:var(--dim);margin-left:auto}
+.voice-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+  cursor:pointer;transition:all .15s;margin-bottom:6px}
+.voice-item:hover{border-color:var(--cyan);background:rgba(6,182,212,.05)}
+.voice-item.active{border-color:var(--green);background:rgba(34,197,94,.07)}
+.voice-item .vi-radio{flex-shrink:0;width:16px;height:16px;border-radius:50%;border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .15s}
+.voice-item.active .vi-radio{border-color:var(--green);background:var(--green);color:#fff}
+.voice-item .vi-name{font-size:14px;font-weight:600}
+.voice-item .vi-info{font-size:12px;color:var(--dim)}
+.voice-item .vi-gender{font-size:11px;padding:1px 5px;border-radius:3px;font-weight:600}
+.vi-gender.F{background:rgba(236,72,153,.12);color:#ec4899}
+.vi-gender.M{background:rgba(59,130,246,.12);color:var(--blue)}
 
 /* overlay */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
@@ -89,6 +106,10 @@ h1 .uptime{font-size:17px;color:var(--dim);font-weight:400;margin-left:auto}
 .modal-item .mi-size{font-size:14px;font-weight:600;color:var(--cyan)}
 .modal-item .mi-speed{font-size:12px;color:var(--dim);margin-top:2px;white-space:nowrap}
 .modal-item.switching{opacity:.4;pointer-events:none}
+.dl-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:4px 14px;font-size:13px;
+  font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.dl-btn:hover{opacity:.85}
+.dl-btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* restart hint */
 .restart-hint{display:none;align-items:center;gap:8px;padding:10px 16px;margin-bottom:16px;
@@ -206,16 +227,25 @@ footer{text-align:center;color:var(--dim);font-size:15px;padding:20px 0}
     <div class="throughput"><h3 id="stt-hist-title"></h3><div id="stt-rows"></div></div>
     <div class="throughput"><h3 id="llm-hist-title"></h3><div id="llm-rows"></div></div>
   </div>
+  <div class="grid">
+    <div class="throughput"><h3 id="tts-hist-title"></h3><div id="tts-rows"></div></div>
+    <div class="throughput"><h3 id="vision-hist-title"></h3><div id="vision-rows"></div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr">
+    <div class="throughput"><h3 id="agent-hist-title"></h3><div id="agent-rows"></div></div>
+  </div>
 </div>
 <footer id="footer"></footer>
 
 <script>
 const I18N={
   zh:{
-    sessions:'对话记录',clear_hist:'清除',clear_confirm:'确定清除所有历史记录？',stt_hist:'STT 历史',llm_hist:'LLM 历史',
+    sessions:'对话记录',clear_hist:'清除',clear_confirm:'确定清除所有历史记录？',
+    stt_hist:'STT 历史',llm_hist:'LLM 历史',tts_hist:'TTS 历史',vision_hist:'Vision 历史',agent_hist:'Agent 历史',
     footer:'常驻面板 · 自动刷新 3s',n_sessions:'会话',
     calls:'调用',latency:'耗时',speedup:'加速比',
     throughput:'吞吐',speed:'速度',chars_s:'字/s',ttft:'首Token',
+    duration:'用时',success:'成功',
     active:'进行中',ended:'已结束',copy:'复制',copied:'已复制',
     user:'用户',assistant:'助手',no_sessions:'暂无会话',
     start:'启动 Bandy',stop:'停止',starting:'启动中...',
@@ -227,13 +257,17 @@ const I18N={
     pick_tts:'选择 TTS 模型',pick_vision:'选择 Vision 模型',pick_agent:'选择 Agent 云端模型',
     local:'本地',realtime:'全双工实时对话',agent_desc:'OpenClaw 复杂任务',
     not_downloaded:'未下载',
+    voice:'音色',pick_voice:'选择音色',
+    download:'下载',downloading:'下载中...',download_ok:'下载完成',download_fail:'下载失败',
     reload_dashboard:'重启面板',reload_confirm:'确定重启整个面板进程？',
   },
   en:{
-    sessions:'Conversations',clear_hist:'Clear',clear_confirm:'Clear all history?',stt_hist:'STT History',llm_hist:'LLM History',
+    sessions:'Conversations',clear_hist:'Clear',clear_confirm:'Clear all history?',
+    stt_hist:'STT History',llm_hist:'LLM History',tts_hist:'TTS History',vision_hist:'Vision History',agent_hist:'Agent History',
     footer:'Persistent Dashboard · Auto-refresh 3s',n_sessions:'sessions',
     calls:'Calls',latency:'Latency',speedup:'Speedup',
     throughput:'Throughput',speed:'Speed',chars_s:'ch/s',ttft:'TTFT',
+    duration:'Duration',success:'Success',
     active:'Active',ended:'Ended',copy:'Copy',copied:'Copied',
     user:'User',assistant:'Asst',no_sessions:'No conversations yet',
     start:'Start Bandy',stop:'Stop',starting:'Starting...',
@@ -245,6 +279,8 @@ const I18N={
     pick_tts:'Select TTS Model',pick_vision:'Select Vision Model',pick_agent:'Select Agent Cloud Model',
     local:'Local',realtime:'Full-duplex realtime',agent_desc:'OpenClaw complex tasks',
     not_downloaded:'Not downloaded',
+    voice:'Voice',pick_voice:'Select Voice',
+    download:'Download',downloading:'Downloading...',download_ok:'Downloaded',download_fail:'Failed',
     reload_dashboard:'Reload Dashboard',reload_confirm:'Restart the entire dashboard process?',
   }
 };
@@ -269,6 +305,9 @@ function updateStatic(){
   document.getElementById('sessions-title').textContent=t('sessions');
   document.getElementById('stt-hist-title').textContent=t('stt_hist');
   document.getElementById('llm-hist-title').textContent=t('llm_hist');
+  document.getElementById('tts-hist-title').textContent=t('tts_hist');
+  document.getElementById('vision-hist-title').textContent=t('vision_hist');
+  document.getElementById('agent-hist-title').textContent=t('agent_hist');
   document.getElementById('footer').textContent=t('footer');
   document.getElementById('mem-label').textContent=t('mem');
   document.getElementById('btn-reload').title=t('reload_dashboard');
@@ -276,7 +315,7 @@ function updateStatic(){
 }
 function updateRestartHint(){
   const el=document.getElementById('restart-hint');
-  if(_needRestart){el.classList.add('show');document.getElementById('restart-text').textContent=t('restart_needed');
+  if(_needRestart&&_running){el.classList.add('show');document.getElementById('restart-text').textContent=t('restart_needed');
     document.getElementById('restart-btn').textContent=t('restart_now');}else{el.classList.remove('show');}
 }
 function updateCtlBtn(){
@@ -343,8 +382,34 @@ function renderModelRow(){
   h+=`<button class="edit-btn" onclick="event.stopPropagation();openPromptEditor('agent')" title="${_lang==='zh'?'编辑系统提示词':'Edit system prompt'}">&#9998;</button>`;
   h+=`<div class="cur-model"><span class="cur-name">${esc(agentShort||'未配置')}</span><span class="tag cloud">${t('cloud')}</span></div>`;
   h+=`<div class="cur-meta">${t('agent_desc')}</div></div>`;
-  const ttsFallback=`<div class="cur-model"><span class="cur-name">Edge TTS</span><span class="tag cloud">${t('cloud')}</span></div>`;
-  h=_renderCard(h,'tts','TTS',av.tts||[],sel,ttsFallback,false);
+  // TTS card with voice sub-row
+  const ttsActive=_findSelected('tts',av.tts||[],sel);
+  h+=`<div class="mcard" onclick="openPicker('tts')"><h3>TTS</h3>`;
+  if(ttsActive){
+    const nm=_shortName(ttsActive);const qt=ttsActive.quant||_quantTag(nm);
+    const isCloud=ttsActive.params==='云端'||ttsActive.params==='Cloud';
+    h+=`<div class="cur-model"><span class="cur-name">${esc(nm)}</span>`;
+    if(isCloud)h+=`<span class="tag cloud">${t('cloud')}</span>`;
+    else if(qt)h+=`<span class="tag quant">${esc(qt)}</span>`;
+    if(ttsActive.size&&ttsActive.size!=='-')h+=`<span class="tag size">${ttsActive.size}</span>`;
+    h+=`</div>`;
+    const spd=_lang==='zh'?ttsActive.speed_zh:ttsActive.speed_en;
+    if(spd)h+=`<div class="cur-meta">${esc(spd)}</div>`;
+    if(ttsActive.voices&&ttsActive.voices.length>0){
+      const curVoice=sel.tts_voice||'';
+      const vInfo=ttsActive.voices.find(v=>v.id===curVoice);
+      const vLabel=vInfo?vInfo.label:curVoice||'default';
+      const vDesc=vInfo?(_lang==='zh'?vInfo.desc_zh:vInfo.desc_en):'';
+      h+=`<div class="voice-row" onclick="event.stopPropagation();openVoicePicker()">`;
+      h+=`<span class="voice-label">${t('voice')}:</span>`;
+      h+=`<span class="voice-name">${esc(vLabel)}</span>`;
+      if(vDesc)h+=`<span style="font-size:12px;color:var(--dim)">${esc(vDesc)}</span>`;
+      h+=`<span class="voice-arrow">▾</span></div>`;
+    }
+  }else{
+    h+=`<div class="cur-model"><span class="cur-name">Edge TTS</span><span class="tag cloud">${t('cloud')}</span></div>`;
+  }
+  h+=`</div>`;
   const visFallback=`<div class="cur-meta">${t('on_demand')}</div>`;
   h=_renderCard(h,'vision','VISION',av.vision||[],sel,visFallback,false);
 
@@ -358,7 +423,51 @@ function openPicker(cat){
   renderPickerList();
   document.getElementById('picker-overlay').classList.add('show');
 }
-function closePicker(){document.getElementById('picker-overlay').classList.remove('show');_pickerCat=null}
+function closePicker(){document.getElementById('picker-overlay').classList.remove('show');_pickerCat=null;_stopPreview()}
+
+function openVoicePicker(){
+  if(!_modelData)return;
+  const{available:av,selected:sel}=_modelData;
+  const ttsActive=_findSelected('tts',av.tts||[],sel);
+  if(!ttsActive||!ttsActive.voices||!ttsActive.voices.length)return;
+  _pickerCat='__voice__';
+  document.getElementById('picker-title').textContent=t('pick_voice');
+  const curVoice=sel.tts_voice||'';
+  let h='';
+  for(const v of ttsActive.voices){
+    const isA=v.id===curVoice;
+    const cls=isA?'voice-item active':'voice-item';
+    const desc=_lang==='zh'?v.desc_zh:v.desc_en;
+    const langTag={'zh':'中文','en':'English','ja':'日本語','ko':'한국어'}[v.lang]||v.lang;
+    h+=`<div class="${cls}" onclick="pickVoice('${v.id}',this)">`;
+    h+=`<div class="vi-radio">${isA?'✓':''}</div>`;
+    h+=`<div style="flex:1"><div class="vi-name">${esc(v.label)}</div>`;
+    h+=`<div class="vi-info"><span class="vi-gender ${v.gender}">${v.gender==='F'?'♀':'♂'}</span> ${esc(langTag)} · ${esc(desc)}</div></div></div>`;
+  }
+  document.getElementById('picker-list').innerHTML=h;
+  document.getElementById('picker-overlay').classList.add('show');
+}
+
+async function pickVoice(voiceId,el){
+  if(el.classList.contains('active'))return;
+  el.classList.add('switching');
+  try{
+    const r=await fetch('/api/models/voice',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({voice:voiceId})});
+    const d=await r.json();
+    if(d.ok){
+      if(d.state){_modelData={available:d.state.available,selected:d.state.selected};_promptData=d.state.prompts||_promptData;}
+      _needRestart=true;updateRestartHint();renderModelRow();
+      openVoicePicker();
+      const ttsRepo=d.state.selected.tts||'';
+      const av=(d.state.available.tts||[]).find(x=>x.repo===ttsRepo);
+      const vInfo=av&&av.voices?av.voices.find(v=>v.id===voiceId):null;
+      const name=vInfo?vInfo.label:voiceId;
+      _playPreview(ttsRepo,voiceId,name);
+    }
+  }catch(e){console.error(e)}
+  el.classList.remove('switching');
+}
 
 function renderPickerList(){
   if(!_modelData||!_pickerCat)return;
@@ -400,16 +509,18 @@ function _pickerItem(it,active,cat){
   if(isCloud)tags+=`<span class="tag cloud">${t('cloud')}</span>`;
   if(it.params&&!isCloud)tags+=`<span class="tag quant">${esc(it.params)}</span>`;
   if(it.quant)tags+=`<span class="tag size">${esc(it.quant)}</span>`;
-  return `<div class="${cls}" onclick="pickModel('${cat}','${repoEsc}',this)">
+  const notDownloaded=!isCloud&&it.size==='-'&&it.repo!=='edge-tts'&&!it.repo.startsWith('/');
+  const dlBtn=notDownloaded?`<button class="dl-btn" data-repo="${repoEsc}" onclick="event.stopPropagation();downloadModel('${repoEsc}',this)">${t('download')}</button>`:'';
+  return `<div class="${cls}" onclick="${notDownloaded?`event.preventDefault();downloadModel('${repoEsc}',this.querySelector('.dl-btn'))`:`pickModel('${cat}','${repoEsc}',this)`}">
     <div class="radio">${active?'✓':''}</div>
     <div class="mi-body">
       <div class="mi-name">${esc(it.short||it.repo.split('/').pop())}</div>
-      <div class="mi-sub">${tags}</div>
+      <div class="mi-sub">${tags}${notDownloaded?`<span class="tag" style="background:rgba(239,68,68,.12);color:var(--red)">${t('not_downloaded')}</span>`:''}</div>
       ${desc?`<div class="mi-desc">${esc(desc)}</div>`:''}
     </div>
     <div class="mi-right">
-      ${it.size?`<div class="mi-size">${it.size}</div>`:''}
-      ${spd?`<div class="mi-speed">${esc(spd)}</div>`:''}
+      ${notDownloaded?dlBtn:(it.size?`<div class="mi-size">${it.size}</div>`:'')}
+      ${spd&&!notDownloaded?`<div class="mi-speed">${esc(spd)}</div>`:''}
     </div></div>`;
 }
 function _isActive(cat,repo,sel){
@@ -427,9 +538,45 @@ async function pickModel(cat,repo,el){
     if(d.ok){
       if(d.state){_modelData={available:d.state.available,selected:d.state.selected};_promptData=d.state.prompts||_promptData;}
       _needRestart=true;updateRestartHint();renderModelRow();renderPickerList();
+      if(cat==='tts'){
+        const av=_modelData.available.tts||[];
+        const it=av.find(x=>x.repo===repo);
+        if(it){
+          const defVoice=(it.voices&&it.voices.length>0)?it.voices[0].id:'';
+          const name=defVoice?it.voices[0].label:_ttsPreviewName(it);
+          _playPreview(repo,defVoice,name);
+          if(it.voices&&it.voices.length>0){
+            setTimeout(()=>openVoicePicker(),300);
+          }
+        }
+      }
     }
   }catch(e){console.error(e)}
   el.classList.remove('switching');
+}
+
+// ── TTS 试听 ──
+let _previewAudio=null;
+function _stopPreview(){if(_previewAudio){_previewAudio.pause();_previewAudio=null}}
+async function _playPreview(repo,voice,name){
+  _stopPreview();
+  try{
+    const r=await fetch('/api/tts/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({repo,voice,name})});
+    if(!r.ok)return;
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    _previewAudio=new Audio(url);
+    _previewAudio.onended=()=>{URL.revokeObjectURL(url);_previewAudio=null};
+    _previewAudio.play();
+  }catch(e){console.error('preview error',e)}
+}
+function _ttsPreviewName(it){
+  if(it.repo==='edge-tts')return 'Edge';
+  const s=(it.short||it.repo.split('/').pop()).replace(/[-_]/g,' ');
+  if(s.toLowerCase().includes('kokoro'))return 'Kokoro';
+  if(s.toLowerCase().includes('qwen'))return 'Qwen TTS';
+  return s;
 }
 
 let _envCtx={zh:'',en:''};
@@ -492,9 +639,23 @@ async function savePrompt(){
 
 async function doRestart(){
   const btn=document.getElementById('restart-btn');btn.disabled=true;btn.textContent=t('stopping');
+  const ctl=document.getElementById('btn-ctl');
+  ctl.textContent=t('stopping');ctl.disabled=true;
+  _running=false;document.getElementById('dot').className='dot';
   try{await fetch('/api/restart',{method:'POST'})}catch(e){}
-  btn.textContent=t('starting');
-  _needRestart=false;updateRestartHint();btn.disabled=false;setTimeout(poll,3000);
+  btn.textContent=t('starting');ctl.textContent=t('starting');
+  _needRestart=false;updateRestartHint();
+  let tries=0;
+  const _waitReady=async()=>{
+    tries++;
+    try{const sr=await fetch('/api/status');const sd=await sr.json();
+      _running=sd.running;updateCtlBtn();
+      if(_running){btn.disabled=false;loadModels();poll();return;}
+    }catch(e){}
+    if(tries<20)setTimeout(_waitReady,2000);
+    else{btn.disabled=false;ctl.disabled=false;updateCtlBtn();poll();}
+  };
+  setTimeout(_waitReady,3000);
 }
 
 async function reloadDashboard(){
@@ -505,11 +666,32 @@ async function reloadDashboard(){
   setTimeout(()=>{location.reload()},3000);
 }
 
+async function downloadModel(repo,btn){
+  if(!btn)return;
+  btn.disabled=true;btn.textContent=t('downloading');
+  try{
+    const r=await fetch('/api/models/download',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({repo})});
+    const d=await r.json();
+    if(!d.ok){btn.textContent=d.error||t('download_fail');return;}
+    const _poll=async()=>{
+      const sr=await fetch('/api/models/download/status?repo='+encodeURIComponent(repo));
+      const s=await sr.json();
+      if(s.running){setTimeout(_poll,2000);return;}
+      if(s.done){btn.textContent=t('download_ok');btn.style.background='var(--green)';
+        await loadModels();renderPickerList();}
+      else{btn.textContent=s.error?s.error.slice(0,20):t('download_fail');btn.disabled=false;}
+    };
+    setTimeout(_poll,2000);
+  }catch(e){btn.textContent=t('download_fail');btn.disabled=false;}
+}
+
 function renderOffline(){
   document.getElementById('uptime').textContent='';
   document.getElementById('stats').innerHTML='';
   document.getElementById('session-list').innerHTML=`<div class="offline-msg">${t('offline')}</div>`;
   document.getElementById('stt-rows').innerHTML='';document.getElementById('llm-rows').innerHTML='';
+  document.getElementById('tts-rows').innerHTML='';document.getElementById('vision-rows').innerHTML='';document.getElementById('agent-rows').innerHTML='';
 }
 
 function render(d){
@@ -526,15 +708,19 @@ function render(d){
     <div class="metric"><span class="label">${t('calls')}</span><span class="value">${s.llm.total_calls}</span></div>
     <div class="metric"><span class="label">${t('throughput')}</span><span class="value">${s.llm.avg_tokens_per_sec}<span class="unit">tok/s</span></span></div>
     <div class="metric"><span class="label">${t('ttft')}</span><span class="value">${s.llm.avg_ttft}<span class="unit">s</span></span></div></div>`;
+  const ag=s.agent||{total_calls:0,avg_duration:0,success_count:0};
+  sh+=`<div class="card"><h3>Agent</h3>
+    <div class="metric"><span class="label">${t('calls')}</span><span class="value">${ag.total_calls}</span></div>
+    <div class="metric"><span class="label">${t('duration')}</span><span class="value">${ag.avg_duration}<span class="unit">s</span></span></div>
+    <div class="metric"><span class="label">${t('success')}</span><span class="value">${ag.success_count}<span class="unit">/${ag.total_calls}</span></span></div></div>`;
   sh+=`<div class="card"><h3>TTS</h3>
     <div class="metric"><span class="label">${t('calls')}</span><span class="value">${s.tts.total_calls}</span></div>
     <div class="metric"><span class="label">${t('speed')}</span><span class="value">${s.tts.avg_chars_per_sec}<span class="unit">${t('chars_s')}</span></span></div>
     <div class="metric"><span class="label">${t('latency')}</span><span class="value">${s.tts.avg_synth_time}<span class="unit">s</span></span></div></div>`;
-  if(s.vision&&s.vision.total_calls>0){
-    sh+=`<div class="card"><h3>Vision</h3>
-      <div class="metric"><span class="label">${t('calls')}</span><span class="value">${s.vision.total_calls}</span></div>
-      <div class="metric"><span class="label">${t('latency')}</span><span class="value">${s.vision.avg_process_time}<span class="unit">s</span></span></div></div>`;
-  }
+  const vi=s.vision||{total_calls:0,avg_process_time:0};
+  sh+=`<div class="card"><h3>Vision</h3>
+    <div class="metric"><span class="label">${t('calls')}</span><span class="value">${vi.total_calls}</span></div>
+    <div class="metric"><span class="label">${t('latency')}</span><span class="value">${vi.avg_process_time}<span class="unit">s</span></span></div></div>`;
   document.getElementById('stats').innerHTML=sh;
   _sessions=d.sessions;const sess=[...d.sessions].reverse().slice(0,20);let sl='';
   for(const se of sess){
@@ -564,6 +750,21 @@ function render(d){
   let lt=`<table><tr><th>${_lang==='zh'?'时间':'Time'}</th><th>${_lang==='zh'?'输入':'Input'}</th><th>Token</th><th>${_lang==='zh'?'吞吐':'TPS'}</th><th>${_lang==='zh'?'首Token':'TTFT'}</th><th>${_lang==='zh'?'总耗时':'Total'}</th></tr>`;
   for(const r of llm){lt+=`<tr><td>${fmt(r.ts)}</td><td>${esc(r.prompt).slice(0,25)}</td><td>${r.tokens}</td><td>${r.tps}tok/s</td><td>${r.ttft}s</td><td>${r.total}s</td></tr>`}
   document.getElementById('llm-rows').innerHTML=lt+'</table>';
+
+  const ttsH=[...(d.recent_tts||[])].reverse();
+  let tt=`<table><tr><th>${_lang==='zh'?'时间':'Time'}</th><th>${_lang==='zh'?'文本':'Text'}</th><th>${_lang==='zh'?'字数':'Chars'}</th><th>${_lang==='zh'?'速度':'Speed'}</th><th>${_lang==='zh'?'耗时':'Latency'}</th></tr>`;
+  for(const r of ttsH){tt+=`<tr><td>${fmt(r.ts)}</td><td>${esc(r.text).slice(0,30)}</td><td>${r.chars}</td><td>${r.cps}${t('chars_s')}</td><td>${r.synth_time}s</td></tr>`}
+  document.getElementById('tts-rows').innerHTML=tt+'</table>';
+
+  const visH=[...(d.recent_vision||[])].reverse();
+  let vt=`<table><tr><th>${_lang==='zh'?'时间':'Time'}</th><th>${_lang==='zh'?'提示':'Prompt'}</th><th>${_lang==='zh'?'结果':'Result'}</th><th>${_lang==='zh'?'耗时':'Latency'}</th></tr>`;
+  for(const r of visH){vt+=`<tr><td>${fmt(r.ts)}</td><td>${esc(r.prompt)}</td><td>${esc(r.result)}</td><td>${r.proc_time}s</td></tr>`}
+  document.getElementById('vision-rows').innerHTML=vt+'</table>';
+
+  const agH=[...(d.recent_agent||[])].reverse();
+  let at=`<table><tr><th>${_lang==='zh'?'时间':'Time'}</th><th>${_lang==='zh'?'任务':'Task'}</th><th>${_lang==='zh'?'分类':'Category'}</th><th>${_lang==='zh'?'用时':'Duration'}</th><th>${_lang==='zh'?'状态':'Status'}</th><th>${_lang==='zh'?'结果':'Result'}</th></tr>`;
+  for(const r of agH){const st=r.success?`<span style="color:var(--green)">${_lang==='zh'?'成功':'OK'}</span>`:`<span style="color:var(--red)">${_lang==='zh'?'失败':'Fail'}</span>`;at+=`<tr><td>${fmt(r.ts)}</td><td>${esc(r.task)}</td><td>${esc(r.category)}</td><td>${r.duration}s</td><td>${st}</td><td>${esc(r.result).slice(0,40)}</td></tr>`}
+  document.getElementById('agent-rows').innerHTML=at+'</table>';
 }
 
 function copySession(sid,btn){
@@ -592,12 +793,24 @@ async function toggleBandy(){
 function hideConfirm(){document.getElementById('stop-overlay').classList.remove('show')}
 async function doStart(){
   const btn=document.getElementById('btn-ctl');btn.textContent=t('starting');btn.disabled=true;
+  document.getElementById('dot').className='dot';
+  _needRestart=false;updateRestartHint();
   try{await fetch('/api/start',{method:'POST'})}catch(e){}
-  setTimeout(poll,2000);
+  let tries=0;
+  const _wait=async()=>{
+    tries++;
+    try{const sr=await fetch('/api/status');const sd=await sr.json();
+      _running=sd.running;updateCtlBtn();
+      if(_running){poll();return;}
+    }catch(e){}
+    if(tries<20)setTimeout(_wait,2000);else{btn.disabled=false;updateCtlBtn();}
+  };
+  setTimeout(_wait,3000);
 }
 async function doStop(){
   hideConfirm();const btn=document.getElementById('btn-ctl');btn.textContent=t('stopping');btn.disabled=true;
   try{await fetch('/api/stop',{method:'POST'})}catch(e){}
+  _running=false;document.getElementById('dot').className='dot';
   setTimeout(poll,1000);
 }
 async function poll(){

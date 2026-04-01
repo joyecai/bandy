@@ -54,9 +54,26 @@ _MODEL_META = {
         "params": "云端", "quant": "", "desc_zh": "Edge TTS 微软云端, 中文自然流畅", "desc_en": "Edge TTS Microsoft cloud",
         "speed_zh": "实测: ≈13字/s (含网络)", "speed_en": "bench: ≈13 chars/s (incl. network)",
     },
-    "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit": {
-        "params": "0.6B", "quant": "4bit", "desc_zh": "★ Qwen3-TTS 本地 MLX, 极速中文", "desc_en": "★ Qwen3-TTS local MLX, fast Chinese",
-        "speed_zh": "实测: ≈9-12字/s (RTF 2.9x)", "speed_en": "bench: ≈9-12 chars/s (RTF 2.9x)",
+    "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit": {
+        "params": "0.6B", "quant": "8bit", "desc_zh": "Qwen3-TTS 多语音, 语音克隆", "desc_en": "Qwen3-TTS multi-voice, voice clone",
+        "speed_zh": "实测: ≈13字/s (RTF 2.3x)", "speed_en": "bench: ≈29 ch/s (RTF 2.3x)",
+        "default_voice": "serena",
+        "voices": [
+            {"id": "serena",   "label": "Serena",   "gender": "F", "lang": "zh", "desc_zh": "温柔知性女声", "desc_en": "Warm gentle female"},
+            {"id": "vivian",   "label": "Vivian",   "gender": "F", "lang": "zh", "desc_zh": "明亮利落女声", "desc_en": "Bright edgy female"},
+            {"id": "uncle_fu", "label": "Uncle Fu", "gender": "M", "lang": "zh", "desc_zh": "沉稳浑厚男声", "desc_en": "Mellow mature male"},
+            {"id": "dylan",    "label": "Dylan",    "gender": "M", "lang": "zh", "desc_zh": "清朗北京男声", "desc_en": "Clear Beijing male"},
+            {"id": "eric",     "label": "Eric",     "gender": "M", "lang": "zh", "desc_zh": "活泼成都男声", "desc_en": "Lively Chengdu male"},
+            {"id": "ryan",     "label": "Ryan",     "gender": "M", "lang": "en", "desc_zh": "动感英文男声", "desc_en": "Dynamic English male"},
+            {"id": "aiden",    "label": "Aiden",    "gender": "M", "lang": "en", "desc_zh": "阳光美式男声", "desc_en": "Sunny American male"},
+            {"id": "ono_anna", "label": "Ono Anna", "gender": "F", "lang": "ja", "desc_zh": "灵动日语女声", "desc_en": "Playful Japanese female"},
+            {"id": "sohee",    "label": "Sohee",    "gender": "F", "lang": "ko", "desc_zh": "温暖韩语女声", "desc_en": "Warm Korean female"},
+        ],
+    },
+    "mlx-community/Kokoro-82M-bf16": {
+        "params": "82M", "quant": "BF16", "desc_zh": "★ Kokoro 极速本地, 仅英文", "desc_en": "★ Kokoro ultra-fast local, English only",
+        "speed_zh": "实测: ≈141 ch/s (RTF 10x)", "speed_en": "bench: ≈141 ch/s (RTF 10x)",
+        "en_only": True,
     },
     # ── Vision ──
     "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit": {
@@ -124,11 +141,13 @@ def _extract_meta(repo: str, name: str) -> dict:
     if not quant:
         m = _RE_QUANT.search(name)
         quant = m.group(1).upper() if m else ""
+    voices = meta.get("voices", [])
     return {
         "params": params, "quant": quant,
         "desc_zh": meta.get("desc_zh", ""), "desc_en": meta.get("desc_en", ""),
         "speed_zh": meta.get("speed_zh", ""), "speed_en": meta.get("speed_en", ""),
         "en_only": meta.get("en_only", False),
+        "voices": voices,
     }
 
 
@@ -138,7 +157,7 @@ def scan_models() -> dict:
     seen_repos = set()
 
     if os.path.isdir(_HF_CACHE):
-        skip = {"pvad", "spkrec", "gguf", "s3tokenizer"}
+        skip = {"pvad", "spkrec", "gguf", "s3tokenizer", "prince-canuma"}
         for entry in sorted(os.listdir(_HF_CACHE)):
             if not entry.startswith("models--"):
                 continue
@@ -183,6 +202,7 @@ def scan_models() -> dict:
             "speed_zh": meta.get("speed_zh", ""),
             "speed_en": meta.get("speed_en", ""),
             "en_only": meta.get("en_only", False),
+            "voices": meta.get("voices", []),
         })
 
     return result
@@ -202,8 +222,8 @@ def current_selection() -> dict:
     stt_sel = wh.get("model", "mlx-community/whisper-small-mlx")
 
     tts_engine = tts_cfg.get("engine", "edge")
-    if tts_engine == "qwen":
-        tts_sel = tts_cfg.get("qwen_repo", "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
+    if tts_engine == "mlx":
+        tts_sel = tts_cfg.get("mlx_repo", "")
     else:
         tts_sel = "edge-tts"
 
@@ -213,6 +233,7 @@ def current_selection() -> dict:
         "agent_model": agent.get("model", api.get("model", "")),
         "agent_provider": agent.get("provider", ""),
         "tts": tts_sel,
+        "tts_voice": tts_cfg.get("mlx_voice", ""),
         "vision": vi.get("model", ""),
     }
 
@@ -234,11 +255,11 @@ def save_selection(category: str, repo: str) -> bool:
     elif category == "tts":
         if repo == "edge-tts":
             data.setdefault("tts", {})["engine"] = "edge"
-        elif "tts" in repo.lower():
-            data.setdefault("tts", {})["engine"] = "qwen"
-            data["tts"]["qwen_repo"] = repo
         else:
-            return False
+            data.setdefault("tts", {})["engine"] = "mlx"
+            data["tts"]["mlx_repo"] = repo
+            default_voice = _MODEL_META.get(repo, {}).get("default_voice", "")
+            data["tts"]["mlx_voice"] = default_voice
     elif category == "vision":
         data.setdefault("vision", {})["model"] = repo
     else:
@@ -248,6 +269,23 @@ def save_selection(category: str, repo: str) -> bool:
         yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
     _refresh_state()
     return True
+
+
+def save_voice(voice_id: str) -> bool:
+    """保存 TTS 音色选择到 config.yaml"""
+    with open(_CFG_PATH, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    data.setdefault("tts", {})["mlx_voice"] = voice_id
+    with open(_CFG_PATH, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    _refresh_state()
+    return True
+
+
+def get_voices(repo: str) -> list:
+    """获取指定 TTS 模型的可选音色列表"""
+    meta = _MODEL_META.get(repo, {})
+    return meta.get("voices", [])
 
 
 # ── dashboard_state.json 持久化 ──

@@ -167,18 +167,20 @@ def vision_query(image_path, prompt="用简洁中文描述你看到了什么", h
         _processor, _config, prompt,
         num_images=1, enable_thinking=False)
 
+    from .tts import _mlx_gpu_lock
     t0 = _time.time()
     try:
-        gen = generate(
-            _model, _processor,
-            image=image_path,
-            prompt=formatted,
-            max_tokens=150,
-            verbose=False,
-            repetition_penalty=1.2,
-            repetition_context_size=64,
-            enable_thinking=False,
-        )
+        with _mlx_gpu_lock:
+            gen = generate(
+                _model, _processor,
+                image=image_path,
+                prompt=formatted,
+                max_tokens=150,
+                verbose=False,
+                repetition_penalty=1.2,
+                repetition_context_size=64,
+                enable_thinking=False,
+            )
         result = gen.text if hasattr(gen, 'text') else str(gen)
         result = _clean_vision_text(result)
         if not result:

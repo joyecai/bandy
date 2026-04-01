@@ -63,6 +63,16 @@ class VisionMetric:
 
 
 @dataclass
+class AgentMetric:
+    task: str = ""
+    result: str = ""
+    duration: float = 0.0
+    category: str = ""
+    success: bool = True
+    timestamp: float = 0.0
+
+
+@dataclass
 class Turn:
     """对话中的一次交互轮次"""
     role: str = ""
@@ -98,6 +108,7 @@ class MetricsStore:
         self.llm_history: list[LlmMetric] = []
         self.tts_history: list[TtsMetric] = []
         self.vision_history: list[VisionMetric] = []
+        self.agent_history: list[AgentMetric] = []
 
         self.models = {
             "stt": {"name": "", "version": ""},
@@ -138,6 +149,7 @@ class MetricsStore:
             self.llm_history.clear()
             self.tts_history.clear()
             self.vision_history.clear()
+            self.agent_history.clear()
             self.start_time = time.time()
 
     def add_turn(self, role, text, **kwargs):
@@ -179,6 +191,13 @@ class MetricsStore:
             if len(self.vision_history) > 500:
                 self.vision_history = self.vision_history[-500:]
 
+    def record_agent(self, m: AgentMetric):
+        with self._lock:
+            m.timestamp = time.time()
+            self.agent_history.append(m)
+            if len(self.agent_history) > 200:
+                self.agent_history = self.agent_history[-200:]
+
     def snapshot(self):
         """返回当前指标快照 (用于 API)"""
         with self._lock:
@@ -210,12 +229,18 @@ class MetricsStore:
                         "total_calls": len(self.vision_history),
                         "avg_process_time": _avg(self.vision_history, "process_time"),
                     },
+                    "agent": {
+                        "total_calls": len(self.agent_history),
+                        "avg_duration": _avg(self.agent_history, "duration"),
+                        "success_count": sum(1 for m in self.agent_history if m.success),
+                    },
                 },
                 "sessions": [self._session_dict(s) for s in self.sessions[-50:]],
                 "recent_stt": [self._stt_dict(m) for m in self.stt_history[-10:]],
                 "recent_llm": [self._llm_dict(m) for m in self.llm_history[-10:]],
                 "recent_tts": [self._tts_dict(m) for m in self.tts_history[-10:]],
                 "recent_vision": [self._vision_dict(m) for m in self.vision_history[-10:]],
+                "recent_agent": [self._agent_dict(m) for m in self.agent_history[-10:]],
             }
 
     @staticmethod
@@ -270,6 +295,14 @@ class MetricsStore:
         return {
             "prompt": m.prompt[:40], "result": m.result[:60],
             "proc_time": round(m.process_time, 2), "ts": m.timestamp,
+        }
+
+    @staticmethod
+    def _agent_dict(m: AgentMetric):
+        return {
+            "task": m.task[:50], "result": m.result[:60],
+            "duration": round(m.duration, 1), "category": m.category,
+            "success": m.success, "ts": m.timestamp,
         }
 
     # ── 文件级 IPC: VA 写文件, 独立面板读 ──

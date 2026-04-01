@@ -1,4 +1,4 @@
-# 用户配置 (含敏感信息)
+# 用户配置 (含敏感 API Key / Token)
 config.yaml
 
 # 运行时生成
@@ -8,9 +8,14 @@ tmp/
 transcript.txt
 dashboard_state.json
 .bandy.pid
+~/.openclaw/
+
+# TTS 试听缓存
+tts_preview/
 
 __pycache__/
 *.pyc
+*.pyo
 
 # OpenClaw 运行时状态和模板文件
 .openclaw/
@@ -26,9 +31,13 @@ USER.md
 # IDE / 编辑器
 .cursor/
 .vscode/
+*.swp
+*.swo
 
 # macOS
 .DS_Store
+Thumbs.db
 
 # 备份
 *.bak
+*.orig

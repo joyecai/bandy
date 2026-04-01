@@ -8,6 +8,7 @@ import asyncio
 from .config import cfg
 from .utils import strip_markdown
 from .telegram import send_tg_file
+from .metrics import store, AgentMetric
 
 AGENT_KW_STRONG = {
     "整理", "汇总", "收集", "发送", "发到", "发给", "转发",
@@ -204,6 +205,9 @@ async def call_openclaw(assistant, task):
             result = strip_markdown(reply) if reply else "已完成"
             dm = round(duration / 60, 1)
             print(f"✅ 任务完成 ({dm}分钟)", flush=True)
+            store.record_agent(AgentMetric(
+                task=task, result=result[:200], duration=duration,
+                category=cat, success=True))
 
             tg_sent = await auto_send_tg(assistant, reply or "", start)
             dm_str = f"用时{dm}分钟"
@@ -212,9 +216,15 @@ async def call_openclaw(assistant, task):
             return f"任务完成，{dm_str}。{result}"
         err = stderr.decode().strip() if stderr else ""
         print(f"❌ agent 错误: {err}", flush=True)
+        store.record_agent(AgentMetric(
+            task=task, result=err[:200], duration=time.time() - start,
+            category=cat, success=False))
         return "执行任务时出错了，请稍后再试"
     except Exception as e:
         print(f"❌ agent 异常: {e}", flush=True)
+        store.record_agent(AgentMetric(
+            task=task, result=str(e)[:200], duration=time.time() - start,
+            category=cat, success=False))
         return "执行出错了，请再试一次"
 
 

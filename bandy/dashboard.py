@@ -1,5 +1,6 @@
 """Dashboard Web 服务: 独立常驻面板，通过 launchctl 管理 Bandy 生命周期"""
 import os
+import sys
 import signal
 import asyncio
 import subprocess
@@ -9,7 +10,7 @@ from aiohttp import web
 
 from .config import cfg
 from .metrics import store
-from .models import save_selection, refresh_state, get_prompts, save_prompt
+from .models import save_selection, save_voice, refresh_state, get_prompts, save_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,119 @@ async def _handle_switch_model(request):
     return web.json_response({"ok": ok, "restart_required": True, "state": state})
 
 
+async def _handle_switch_voice(request):
+    body = await request.json()
+    voice_id = body.get("voice", "")
+    if not voice_id:
+        return web.json_response({"ok": False, "error": "missing voice"})
+    ok = save_voice(voice_id)
+    state = refresh_state()
+    return web.json_response({"ok": ok, "restart_required": True, "state": state})
+
+
+_PREVIEW_DIR = os.path.expanduser("~/.openclaw/tts_preview")
+_preview_lock = asyncio.Lock()
+
+
+def _gen_preview_sync(repo: str, voice: str, name: str, out_path: str):
+    """子进程内生成试听音频."""
+    text = f"hi，我是{name}"
+    if repo == "edge-tts":
+        import edge_tts, asyncio as _aio
+        mp3 = out_path.replace(".wav", ".mp3")
+        _aio.run(edge_tts.Communicate(text, "zh-CN-XiaoyiNeural").save(mp3))
+        import subprocess as _sp
+        _sp.run(["ffmpeg", "-y", "-i", mp3, "-ar", "24000", out_path],
+                capture_output=True, timeout=10)
+        try:
+            os.remove(mp3)
+        except OSError:
+            pass
+    else:
+        from mlx_audio.tts.utils import load_model
+        import numpy as np, soundfile as sf
+        model = load_model(repo)
+        kw = {"text": text, "verbose": False}
+        if voice:
+            kw["voice"] = voice
+        results = list(model.generate(**kw))
+        audio = np.array(results[0].audio)
+        sf.write(out_path, audio, model.sample_rate)
+
+
+_download_status = {}
+
+
+async def _handle_model_download(request):
+    """下载 HuggingFace 模型 (后台执行)."""
+    body = await request.json()
+    repo = body.get("repo", "")
+    if not repo or repo.startswith("/"):
+        return web.json_response({"ok": False, "error": "invalid repo"})
+
+    if repo in _download_status and _download_status[repo].get("running"):
+        return web.json_response({"ok": False, "error": "already downloading"})
+
+    _download_status[repo] = {"running": True, "done": False, "error": ""}
+
+    async def _do_download():
+        import subprocess as sp
+        env = os.environ.copy()
+        env.pop("HF_HUB_OFFLINE", None)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-c",
+                f"from huggingface_hub import snapshot_download; snapshot_download('{repo}')",
+                env=env, stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE)
+            _, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                _download_status[repo] = {"running": False, "done": True, "error": ""}
+            else:
+                err = stderr.decode().strip().split("\n")[-1] if stderr else "unknown"
+                _download_status[repo] = {"running": False, "done": False, "error": err}
+        except Exception as e:
+            _download_status[repo] = {"running": False, "done": False, "error": str(e)}
+
+    asyncio.create_task(_do_download())
+    return web.json_response({"ok": True, "status": "downloading"})
+
+
+async def _handle_model_download_status(request):
+    repo = request.query.get("repo", "")
+    if repo in _download_status:
+        return web.json_response(_download_status[repo])
+    return web.json_response({"running": False, "done": False, "error": ""})
+
+
+async def _handle_tts_preview(request):
+    body = await request.json()
+    repo = body.get("repo", "")
+    voice = body.get("voice", "")
+    name = body.get("name", "")
+    if not repo or not name:
+        return web.json_response({"ok": False, "error": "missing params"})
+
+    os.makedirs(_PREVIEW_DIR, exist_ok=True)
+    safe_key = f"{repo.replace('/', '_')}_{voice or 'default'}"
+    out_path = os.path.join(_PREVIEW_DIR, f"{safe_key}.wav")
+
+    if not os.path.exists(out_path):
+        async with _preview_lock:
+            if not os.path.exists(out_path):
+                try:
+                    await asyncio.to_thread(
+                        _gen_preview_sync, repo, voice, name, out_path)
+                except Exception as e:
+                    logger.exception("试听生成失败")
+                    return web.json_response({"ok": False, "error": str(e)})
+
+    return web.FileResponse(out_path, headers={
+        "Content-Type": "audio/wav",
+        "Cache-Control": "public, max-age=86400",
+    })
+
+
 async def _handle_index(request):
     with open(_HTML_PATH, "r", encoding="utf-8") as f:
         html = f.read()
@@ -194,6 +308,10 @@ async def start_dashboard(port=None):
     app.router.add_post('/api/lang', _handle_set_lang)
     app.router.add_get('/api/models', _handle_models)
     app.router.add_post('/api/models/switch', _handle_switch_model)
+    app.router.add_post('/api/models/voice', _handle_switch_voice)
+    app.router.add_post('/api/tts/preview', _handle_tts_preview)
+    app.router.add_post('/api/models/download', _handle_model_download)
+    app.router.add_get('/api/models/download/status', _handle_model_download_status)
     app.router.add_get('/api/prompts', _handle_get_prompts)
     app.router.add_post('/api/prompts/save', _handle_save_prompt)
     app.router.add_post('/api/dashboard/reload', _handle_dashboard_reload)
