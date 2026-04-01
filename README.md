@@ -5,8 +5,16 @@
     在 Apple Silicon Mac 上运行的本地语音助手
   </p>
   <p align="center">
-    <a href="#quick-start">Quick Start</a> · <a href="#快速开始">快速开始</a> · <a href="https://github.com/joyecai/bandy/releases">Releases</a>
+    <a href="#quick-start">Quick Start</a> · <a href="#快速开始">快速开始</a> · <a href="https://github.com/joyecai/bandy/releases">Releases</a> · <a href="https://www.youtube.com/watch?v=2VoQTcYthRI">Demo Video</a>
   </p>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=2VoQTcYthRI">
+    <img src="https://img.youtube.com/vi/2VoQTcYthRI/maxresdefault.jpg" alt="Bandy Demo Video" width="640">
+  </a>
+  <br>
+  <sub>Click to watch demo / 点击观看演示视频</sub>
 </p>
 
 ---
