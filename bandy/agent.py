@@ -229,14 +229,14 @@ async def call_openclaw(assistant, task):
 
 
 def _collect_new_files_to_output(start_time):
-    """将 workspace 根目录新生成的文件移到 output/日期/ 目录."""
+    """将 OpenClaw workspace 根目录新生成的文件移到 output/日期/ 目录."""
     out_dir = _today_output_dir()
     moved = []
     try:
-        for fname in os.listdir(cfg.PROJECT_ROOT):
+        for fname in os.listdir(cfg.OPENCLAW_WORKSPACE):
             if not fname.endswith(_OUTPUT_EXTS):
                 continue
-            fpath = os.path.join(cfg.PROJECT_ROOT, fname)
+            fpath = os.path.join(cfg.OPENCLAW_WORKSPACE, fname)
             if not os.path.isfile(fpath):
                 continue
             if os.path.getmtime(fpath) < start_time:

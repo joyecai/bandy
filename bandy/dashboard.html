@@ -162,6 +162,12 @@ h1 .uptime{font-size:17px;color:var(--dim);font-weight:400;margin-left:auto}
 table{width:100%;border-collapse:collapse;font-size:16px}
 th{text-align:left;color:var(--dim);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--border)}
 td{padding:7px 10px;border-bottom:1px solid rgba(42,45,62,.5);font-variant-numeric:tabular-nums}
+.toggle-sw{position:relative;width:36px;height:20px;flex-shrink:0}
+.toggle-sw input{opacity:0;width:0;height:0}
+.toggle-sw .slider{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:background .2s}
+.toggle-sw .slider::before{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle-sw input:checked+.slider{background:var(--green)}
+.toggle-sw input:checked+.slider::before{transform:translateX(16px)}
 footer{text-align:center;color:var(--dim);font-size:15px;padding:20px 0}
 .offline-msg{text-align:center;padding:60px 20px;color:var(--dim);font-size:18px}
 @media(max-width:1100px){.model-row{grid-template-columns:repeat(3,1fr)}}
@@ -260,6 +266,7 @@ const I18N={
     voice:'音色',pick_voice:'选择音色',
     download:'下载',downloading:'下载中...',download_ok:'下载完成',download_fail:'下载失败',
     reload_dashboard:'重启面板',reload_confirm:'确定重启整个面板进程？',
+    vision_cam:'摄像头',vision_off:'摄像头已关闭',
   },
   en:{
     sessions:'Conversations',clear_hist:'Clear',clear_confirm:'Clear all history?',
@@ -282,12 +289,13 @@ const I18N={
     voice:'Voice',pick_voice:'Select Voice',
     download:'Download',downloading:'Downloading...',download_ok:'Downloaded',download_fail:'Failed',
     reload_dashboard:'Reload Dashboard',reload_confirm:'Restart the entire dashboard process?',
+    vision_cam:'Camera',vision_off:'Camera disabled',
   }
 };
 function catLabel(c){if(c==='llm')return _lang==='zh'?'本地 LLM':'Local LLM';const m={stt:'STT',agent:'Agent',tts:'TTS',vision:'VISION'};return m[c]||c;}
 
 let _lang=localStorage.getItem('bandy_lang')||'zh';
-let _sessions=[],_lastData=null,_running=false,_needRestart=false,_modelData=null,_pickerCat=null;
+let _sessions=[],_lastData=null,_running=false,_needRestart=false,_modelData=null,_pickerCat=null,_visionEnabled=true;
 function t(k){return(I18N[_lang]&&I18N[_lang][k])||I18N.zh[k]||k}
 function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function fmt(ts){if(!ts)return'-';const d=new Date(ts*1000);return d.toLocaleTimeString(_lang==='zh'?'zh-CN':'en-US',{hour12:false})}
@@ -410,8 +418,28 @@ function renderModelRow(){
     h+=`<div class="cur-model"><span class="cur-name">Edge TTS</span><span class="tag cloud">${t('cloud')}</span></div>`;
   }
   h+=`</div>`;
-  const visFallback=`<div class="cur-meta">${t('on_demand')}</div>`;
-  h=_renderCard(h,'vision','VISION',av.vision||[],sel,visFallback,false);
+  // Vision card with camera toggle
+  const visActive=_findSelected('vision',av.vision||[],sel);
+  h+=`<div class="mcard" onclick="openPicker('vision')"><h3>VISION</h3>`;
+  h+=`<div style="position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">`;
+  h+=`<span style="font-size:12px;color:var(--dim)">${t('vision_cam')}</span>`;
+  h+=`<label class="toggle-sw"><input type="checkbox" id="vis-toggle" ${_visionEnabled?'checked':''} onchange="toggleVision(this.checked)"><span class="slider"></span></label>`;
+  h+=`</div>`;
+  if(!_visionEnabled){
+    h+=`<div class="cur-meta" style="color:var(--dim)">${t('vision_off')}</div>`;
+  } else if(visActive){
+    const nm=_shortName(visActive);const qt=visActive.quant||_quantTag(nm);
+    h+=`<div class="cur-model"><span class="cur-name">${esc(nm)}</span>`;
+    if(qt)h+=`<span class="tag quant">${esc(qt)}</span>`;
+    if(visActive.size&&visActive.size!=='-')h+=`<span class="tag size">${visActive.size}</span>`;
+    h+=`</div>`;
+    const spd=_lang==='zh'?visActive.speed_zh:visActive.speed_en;
+    if(spd)h+=`<div class="cur-meta">${esc(spd)}</div>`;
+  } else {
+    h+=`<div class="cur-meta">${t('on_demand')}</div>`;
+  }
+  h+=`</div>`;
+  
 
   el.innerHTML=h;
 }
@@ -822,7 +850,17 @@ async function poll(){
   }catch(e){console.error(e);_running=false;updateCtlBtn();renderOffline()}
 }
 
-setLang(_lang);loadModels();poll();setInterval(poll,3000);
+async function loadVisionEnabled(){
+  try{const r=await fetch('/api/vision/enabled');const d=await r.json();_visionEnabled=d.enabled;renderModelRow();}catch(e){}
+}
+async function toggleVision(on){
+  try{
+    const r=await fetch('/api/vision/enabled',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:on})});
+    const d=await r.json();
+    if(d.ok){_visionEnabled=d.enabled;_needRestart=true;updateRestartHint();renderModelRow();}
+  }catch(e){console.error(e)}
+}
+setLang(_lang);loadModels();loadVisionEnabled();poll();setInterval(poll,3000);
 </script>
 </body>
 </html>

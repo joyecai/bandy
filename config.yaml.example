@@ -20,6 +20,7 @@ tts:
   mlx_repo: "mlx-community/Kokoro-82M-bf16"
 
 vision:
+  enabled: true
   model: "/Users/you/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit"
   preload: false
   imagesnap: "/opt/homebrew/bin/imagesnap"

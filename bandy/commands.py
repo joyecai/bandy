@@ -85,9 +85,11 @@ async def process_command(assistant, text):
     low = text.lower()
     resp = None
 
-    # -- 摄像头指令 --
+    # -- 摄像头指令 (需开启摄像头) --
     cam_action = None
-    if "点" in text and "头" in text or "nod" in low:
+    if not cfg.VISION_ENABLED:
+        pass
+    elif "点" in text and "头" in text or "nod" in low:
         cam_action = camera_nod
         resp = _t("好的", "OK")
     elif "复位" in text or "居中" in text or "回正" in text or "center" in low:
@@ -140,10 +142,11 @@ async def process_command(assistant, text):
         asyncio.create_task(asyncio.to_thread(cam_action))
         return await assistant._reply(resp)
 
-    # -- 视觉识别 --
-    in_vision_ctx = (time.time() - assistant._vision_time < cfg.VISION_CONTEXT_TTL
+    # -- 视觉识别 (需开启摄像头) --
+    in_vision_ctx = (cfg.VISION_ENABLED
+                     and time.time() - assistant._vision_time < cfg.VISION_CONTEXT_TTL
                      and assistant._vision_frame and os.path.isfile(assistant._vision_frame))
-    trigger_vision = is_vision_command(text)
+    trigger_vision = cfg.VISION_ENABLED and is_vision_command(text)
 
     if trigger_vision or in_vision_ctx:
         if trigger_vision:

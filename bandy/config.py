@@ -52,6 +52,7 @@ class _Cfg:
         self.WHISPER_MODEL = wh.get("model", "mlx-community/whisper-small-mlx")
 
         vi = data.get("vision", {})
+        self.VISION_ENABLED = vi.get("enabled", True)
         self.VISION_MODEL = vi.get("model", "/Users/joye/.cache/mlx-models/MiniCPM-o-4_5-mlx-4bit")
         self.VISION_PRELOAD = vi.get("preload", False)
         self.IMAGESNAP = vi.get("imagesnap", "/opt/homebrew/bin/imagesnap")
@@ -96,10 +97,11 @@ class _Cfg:
         self.AGENT_PROMPT_EN = ag.get("system_prompt_en", "")
 
         self.PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+        self.OPENCLAW_WORKSPACE = os.path.expanduser("~/.openclaw/workspace")
 
     @property
     def output_path(self):
-        return os.path.join(self.PROJECT_ROOT, self.OUTPUT_DIR)
+        return os.path.join(self.OPENCLAW_WORKSPACE, self.OUTPUT_DIR)
 
 
 def _init_env(c: _Cfg):

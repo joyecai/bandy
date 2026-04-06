@@ -78,8 +78,11 @@ class VoiceAssistant:
         self._calibrate_noise()
         await tts_mod.warm_tts(self._tts_cache)
         stt_mod.warm_whisper(self.whisper_model)
-        from . import vision as vision_mod
-        vision_mod.preload(blocking=True)
+        if cfg.VISION_ENABLED:
+            from . import vision as vision_mod
+            vision_mod.preload(blocking=True)
+        else:
+            print("👁️ 摄像头/视觉已关闭，跳过模型加载", flush=True)
         from .llm import warmup_context
         warmup_context()
         if cfg.LOCAL_LLM_REPO:
@@ -344,12 +347,14 @@ class VoiceAssistant:
         store.end_session()
         if self.ai_tracking_active:
             self.ai_tracking_active = False
-            asyncio.create_task(asyncio.to_thread(disable_ai_tracking))
+            if cfg.VISION_ENABLED:
+                asyncio.create_task(asyncio.to_thread(disable_ai_tracking))
             print("📷 AI追踪已关闭", flush=True)
 
     def _dismiss_bg(self):
-        camera_quit()
-        print("📷 摄像头和软件已关闭", flush=True)
+        if cfg.VISION_ENABLED:
+            camera_quit()
+            print("📷 摄像头和软件已关闭", flush=True)
 
     async def _start_tracking(self):
         try:

@@ -287,6 +287,34 @@ async def _handle_set_lang(request):
     return web.json_response({"ok": True, "lang": lang})
 
 
+async def _handle_get_vision_enabled(request):
+    import yaml
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        enabled = data.get("vision", {}).get("enabled", True)
+    except Exception:
+        enabled = True
+    return web.json_response({"enabled": enabled})
+
+
+async def _handle_set_vision_enabled(request):
+    import yaml
+    body = await request.json()
+    enabled = bool(body.get("enabled", True))
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        data.setdefault("vision", {})["enabled"] = enabled
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        return web.json_response({"ok": True, "enabled": enabled, "restart_required": True})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)})
+
+
 async def _handle_dashboard_reload(request):
     """重启整个面板进程（launchd KeepAlive 会自动拉起）"""
     logger.info("收到面板重启请求，即将退出进程...")
@@ -314,6 +342,8 @@ async def start_dashboard(port=None):
     app.router.add_get('/api/models/download/status', _handle_model_download_status)
     app.router.add_get('/api/prompts', _handle_get_prompts)
     app.router.add_post('/api/prompts/save', _handle_save_prompt)
+    app.router.add_get('/api/vision/enabled', _handle_get_vision_enabled)
+    app.router.add_post('/api/vision/enabled', _handle_set_vision_enabled)
     app.router.add_post('/api/dashboard/reload', _handle_dashboard_reload)
     runner = web.AppRunner(app)
     await runner.setup()
