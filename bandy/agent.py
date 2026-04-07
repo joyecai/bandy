@@ -32,10 +32,9 @@ def _agent_preamble():
     return (
         f"你是 OpenClaw AI Agent，用户昵称你为'{cfg.WAKE_WORD_AGENT}'。"
         f"当用户提到'{cfg.WAKE_WORD_AGENT}'时就是在称呼你自己。\n"
-        f"用户 Telegram chat_id: {cfg.TG_CHAT_ID}。\n"
         f"所有生成的文件必须保存到: {out_dir}\n"
-        "重要: 不要自行发送文件到Telegram，只需将文件保存到本地即可，系统会自动发送。\n"
-        "如果任务需要发送文本消息到Telegram，可以直接使用该ID。"
+        "重要: 不要自行发送任何消息或文件到Telegram，只需将文件保存到本地即可。"
+        "系统会自动通过专用Bot发送给用户。你只需返回文本结果。"
     )
 
 _FILE_RE = re.compile(
