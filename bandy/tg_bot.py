@@ -128,8 +128,21 @@ async def run_tg_bot(assistant):
     print("🤖 TG Bot 轮询已停止", flush=True)
 
 
+def _strip_agent_wake(text):
+    """剥离龙虾唤醒词, 返回 (stripped_task, matched)."""
+    import re
+    _aw = re.escape(cfg.WAKE_WORD_AGENT)
+    if cfg.WAKE_WORD_AGENT not in text:
+        return text, False
+    if re.search(rf'(?:你)?(?:让|叫|问|跟|告诉|请){_aw}', text) or text.strip().startswith(cfg.WAKE_WORD_AGENT):
+        task = re.sub(rf'(?:你)?(?:让|叫|问|跟|告诉|请)?{_aw}\s*', '', text).strip()
+        task = re.sub(r'^(?:去|来|帮我|帮忙)\s*', '', task).strip()
+        return task, bool(task)
+    return text, False
+
+
 async def _process_tg_text(assistant, text):
-    """TG 消息的命令路由: 天气 → Agent → LLM."""
+    """TG 消息的命令路由: 天气 → 龙虾Agent → Agent → LLM."""
     from .weather import parse_weather_query, get_weather
     from .agent import needs_agent
     from .utils import strip_markdown
@@ -140,6 +153,14 @@ async def _process_tg_text(assistant, text):
     if any(w in text for w in _weather_kw) or any(w in low for w in ["weather", "forecast", "temperature"]):
         city, off, disp, dz = parse_weather_query(text)
         return await asyncio.to_thread(get_weather, city, off, disp, dz)
+
+    task, is_agent_cmd = _strip_agent_wake(text)
+    if is_agent_cmd:
+        from .agent import estimate_seconds, format_eta
+        est_s = estimate_seconds(task, assistant._task_history)
+        await send_tg_message(f"⏳ Bandy 正在处理，预计{format_eta(est_s)}完成")
+        asyncio.create_task(_run_agent_and_reply(assistant, task))
+        return None
 
     if needs_agent(text):
         from .agent import estimate_seconds, format_eta
@@ -154,10 +175,10 @@ async def _process_tg_text(assistant, text):
 
 
 async def _run_agent_and_reply(assistant, task):
-    """后台运行 agent, 完成后回复到 TG."""
+    """后台运行 agent, 完成后回复到 TG (不语音播报)."""
     try:
         from .agent import call_openclaw
-        result = await call_openclaw(assistant, task)
+        result = await call_openclaw(assistant, task, silent=True)
         if result:
             assistant._record("assistant", result)
             await send_tg_message(result)

@@ -42,20 +42,6 @@ async def process_command(assistant, text):
         asyncio.create_task(asyncio.to_thread(assistant._dismiss_bg))
         return await assistant._reply(_t("好的，我先退下了", "OK, I'll step back"))
 
-    if cfg.WAKE_WORD_AGENT in text:
-        import re
-        _aw = re.escape(cfg.WAKE_WORD_AGENT)
-        question = re.sub(
-            rf'(?:你)?(?:让|叫|问|跟|告诉|请)?{_aw}\s*', '', text
-        ).strip()
-        question = re.sub(r'^(?:去|来|帮我|帮忙)\s*', '', question).strip()
-        if not question:
-            return await assistant._reply(_t("在", "Yes?"))
-        t = asyncio.create_task(run_agent_bg(assistant, question))
-        assistant._bg_tasks.add(t)
-        t.add_done_callback(assistant._bg_tasks.discard)
-        return
-
     if is_wake_word(text):
         if in_conv:
             text = strip_wake_word(text)
@@ -81,6 +67,20 @@ async def process_command(assistant, text):
         return
 
     assistant.last_command_time = now
+
+    if cfg.WAKE_WORD_AGENT in text:
+        import re
+        _aw = re.escape(cfg.WAKE_WORD_AGENT)
+        question = re.sub(
+            rf'(?:你)?(?:让|叫|问|跟|告诉|请)?{_aw}\s*', '', text
+        ).strip()
+        question = re.sub(r'^(?:去|来|帮我|帮忙)\s*', '', question).strip()
+        if not question:
+            return await assistant._reply(_t("在", "Yes?"))
+        t = asyncio.create_task(run_agent_bg(assistant, question))
+        assistant._bg_tasks.add(t)
+        t.add_done_callback(assistant._bg_tasks.discard)
+        return
 
     low = text.lower()
     resp = None

@@ -30,6 +30,8 @@ AGENT_KW_WEAK = [
 def _agent_preamble():
     out_dir = _today_output_dir()
     return (
+        f"你是 OpenClaw AI Agent，用户昵称你为'{cfg.WAKE_WORD_AGENT}'。"
+        f"当用户提到'{cfg.WAKE_WORD_AGENT}'时就是在称呼你自己。\n"
         f"用户 Telegram chat_id: {cfg.TG_CHAT_ID}。\n"
         f"所有生成的文件必须保存到: {out_dir}\n"
         "重要: 不要自行发送文件到Telegram，只需将文件保存到本地即可，系统会自动发送。\n"
@@ -134,8 +136,8 @@ def _today_output_dir():
     return d
 
 
-async def call_openclaw(assistant, task):
-    """带进度播报的 agent 调用."""
+async def call_openclaw(assistant, task, silent=False):
+    """带进度播报的 agent 调用. silent=True 时不语音播报（TG 来源）."""
     parts = [_agent_preamble()]
 
     history = assistant._recent_history(limit=10)
@@ -155,7 +157,8 @@ async def call_openclaw(assistant, task):
     eta_str = format_eta(est_s)
     announce = f"Bandy正在处理，预计{eta_str}完成"
     print(f"🤖 {announce}", flush=True)
-    assistant._announce(announce)
+    if not silent:
+        assistant._announce(announce)
 
     start = time.time()
     update_count = 0
@@ -181,7 +184,8 @@ async def call_openclaw(assistant, task):
                     update_count += 1
                     msg = f"Bandy还在处理中，已经{format_eta(int(elapsed))}了，快好了"
                     print(f"🤖 {msg}", flush=True)
-                    assistant._announce(msg)
+                    if not silent:
+                        assistant._announce(msg)
                     next_update = elapsed + 60
                 if elapsed > 600:
                     proc.kill()
@@ -196,14 +200,20 @@ async def call_openclaw(assistant, task):
         if len(assistant._task_history) > 100:
             assistant._task_history = assistant._task_history[-100:]
 
-        if proc.returncode == 0 and stdout:
+        reply = None
+        if stdout:
             try:
                 d = json.loads(stdout.decode())
                 reply = d.get("result", {}).get("payloads", [{}])[0].get("text", "")
             except (KeyError, IndexError, json.JSONDecodeError):
-                reply = stdout.decode().strip()
+                if proc.returncode == 0:
+                    reply = stdout.decode().strip()
+
+        if reply:
             result = strip_markdown(reply) if reply else "已完成"
             dm = round(duration / 60, 1)
+            if proc.returncode != 0:
+                print(f"⚠️ agent 进程异常退出({proc.returncode})但结果有效", flush=True)
             print(f"✅ 任务完成 ({dm}分钟)", flush=True)
             store.record_agent(AgentMetric(
                 task=task, result=result[:200], duration=duration,
@@ -296,17 +306,18 @@ async def auto_send_tg(assistant, reply, start_time):
     return bool(sent_this_call)
 
 
-async def run_agent_bg(assistant, task):
+async def run_agent_bg(assistant, task, silent=False):
     """后台运行 agent, 不阻塞语音交互. 完成后通过队列播报."""
     try:
         print(f"🔧 后台任务: {task}", flush=True)
-        result = await call_openclaw(assistant, task)
+        result = await call_openclaw(assistant, task, silent=silent)
         if result:
             print(f"🤖 回复: {result}", flush=True)
-            assistant._announce(result)
+            if not silent:
+                assistant._announce(result)
     except asyncio.CancelledError:
         print("🔧 后台任务已取消", flush=True)
     except Exception as e:
         print(f"❌ 后台任务错误: {e}", flush=True)
-        if assistant.running:
+        if assistant.running and not silent:
             assistant._announce("任务执行出错了")
