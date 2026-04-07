@@ -289,7 +289,7 @@ async def _handle_set_lang(request):
 
 async def _handle_get_vision_enabled(request):
     import yaml
-    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bandy_config.yaml")
     try:
         with open(cfg_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
@@ -303,7 +303,7 @@ async def _handle_set_vision_enabled(request):
     import yaml
     body = await request.json()
     enabled = bool(body.get("enabled", True))
-    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+    cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bandy_config.yaml")
     try:
         with open(cfg_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}

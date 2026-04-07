@@ -9,8 +9,8 @@ import textwrap
 
 # ── 常量 ──
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-CFG_PATH = os.path.join(WORKSPACE, "config.yaml")
-CFG_EXAMPLE = os.path.join(WORKSPACE, "config.yaml.example")
+CFG_PATH = os.path.join(WORKSPACE, "bandy_config.yaml")
+CFG_EXAMPLE = os.path.join(WORKSPACE, "bandy_config.yaml.example")
 LOGS_DIR = os.path.expanduser("~/.openclaw/logs")
 LA_DIR = os.path.expanduser("~/Library/LaunchAgents")
 DESKTOP = os.path.expanduser("~/Desktop")
@@ -146,7 +146,7 @@ def step_configure():
     cfg = {}
 
     if os.path.exists(CFG_PATH):
-        print(f"  {YELLOW}已检测到 config.yaml, 是否覆盖?{NC}")
+        print(f"  {YELLOW}已检测到 bandy_config.yaml, 是否覆盖?{NC}")
         if not _ask_yn("重新配置?", default=False):
             print(f"  {DIM}跳过配置, 使用现有文件{NC}")
             return
@@ -231,7 +231,7 @@ def step_configure():
 
     with open(CFG_PATH, "w", encoding="utf-8") as f:
         yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-    print(f"  {GREEN}✓{NC} config.yaml 已生成")
+    print(f"  {GREEN}✓{NC} bandy_config.yaml 已生成")
 
 
 # ═══════════════════════════════════════════

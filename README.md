@@ -103,9 +103,9 @@ All models can be switched in the Dashboard. 所有模型可在 Dashboard 中一
 
 ## Configuration / 配置
 
-`config.yaml` is auto-generated during installation. You can also edit it manually or via the Dashboard prompt editor:
+`bandy_config.yaml` is auto-generated during installation. You can also edit it manually or via the Dashboard prompt editor:
 
-`config.yaml` 在安装引导时自动生成，也可手动编辑或通过 Dashboard 提示词编辑器修改：
+`bandy_config.yaml` 在安装引导时自动生成，也可手动编辑或通过 Dashboard 提示词编辑器修改：
 
 ```yaml
 api:
@@ -140,7 +140,7 @@ bandy/
 ├── install.py              # Guided installer / 安装引导脚本
 ├── main.py                 # Voice assistant entry / 语音助手入口
 ├── serve.py                # Dashboard server entry / Dashboard 服务入口
-├── config.yaml.example     # Config template / 配置模板
+├── bandy_config.yaml.example  # Config template / 配置模板
 ├── requirements.txt        # Python dependencies
 ├── bandy/
 │   ├── assistant.py        # Voice assistant main loop (VAD/recording/playback)

@@ -1,8 +1,8 @@
-"""配置加载: 读取 config.yaml → 全局对象 cfg"""
+"""配置加载: 读取 bandy_config.yaml → 全局对象 cfg"""
 import os
 import yaml
 
-_CFG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+_CFG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bandy_config.yaml")
 
 
 def _load():

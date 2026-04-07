@@ -121,7 +121,7 @@ def _gather_hw_context():
 
 
 def _current_models_context():
-    """实时从 config.yaml 读取当前选中的模型，返回 (中文, 英文)"""
+    """实时从 bandy_config.yaml 读取当前选中的模型，返回 (中文, 英文)"""
     try:
         from .models import current_selection
         sel = current_selection()

@@ -1,5 +1,5 @@
 # 用户配置 (含敏感 API Key / Token)
-config.yaml
+bandy_config.yaml
 
 # 运行时生成
 output/

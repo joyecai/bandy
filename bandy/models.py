@@ -1,11 +1,11 @@
-"""模型发现与管理: 扫描 HuggingFace 缓存, 分类, 读写 config.yaml + dashboard_state.json"""
+"""模型发现与管理: 扫描 HuggingFace 缓存, 分类, 读写 bandy_config.yaml + dashboard_state.json"""
 import json
 import os
 import re
 import yaml
 
 _HF_CACHE = os.path.expanduser("~/.cache/huggingface/hub")
-_CFG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+_CFG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bandy_config.yaml")
 _STATE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard_state.json")
 
 _CATEGORY_RULES = [
@@ -209,7 +209,7 @@ def scan_models() -> dict:
 
 
 def current_selection() -> dict:
-    """从 config.yaml 读取当前选中: stt, llm(本地), agent(云端), tts, vision"""
+    """从 bandy_config.yaml 读取当前选中: stt, llm(本地), agent(云端), tts, vision"""
     with open(_CFG_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     wh = data.get("whisper", {})
@@ -239,7 +239,7 @@ def current_selection() -> dict:
 
 
 def save_selection(category: str, repo: str) -> bool:
-    """保存模型选择到 config.yaml + dashboard_state.json"""
+    """保存模型选择到 bandy_config.yaml + dashboard_state.json"""
     with open(_CFG_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
@@ -272,7 +272,7 @@ def save_selection(category: str, repo: str) -> bool:
 
 
 def save_voice(voice_id: str) -> bool:
-    """保存 TTS 音色选择到 config.yaml"""
+    """保存 TTS 音色选择到 bandy_config.yaml"""
     with open(_CFG_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     data.setdefault("tts", {})["mlx_voice"] = voice_id
