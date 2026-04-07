@@ -68,7 +68,7 @@ async def process_command(assistant, text):
             store.new_session()
             remainder = strip_wake_word(text)
             speak_task = asyncio.create_task(assistant._reply(_t("在", "Yes?")))
-            if not assistant.ai_tracking_active:
+            if cfg.VISION_ENABLED and not assistant.ai_tracking_active:
                 assistant.ai_tracking_active = True
                 asyncio.create_task(assistant._start_tracking())
             await speak_task

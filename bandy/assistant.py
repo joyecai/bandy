@@ -347,12 +347,12 @@ class VoiceAssistant:
         store.end_session()
         if self.ai_tracking_active:
             self.ai_tracking_active = False
-            if cfg.VISION_ENABLED:
-                asyncio.create_task(asyncio.to_thread(disable_ai_tracking))
+            asyncio.create_task(asyncio.to_thread(disable_ai_tracking))
             print("📷 AI追踪已关闭", flush=True)
 
     def _dismiss_bg(self):
-        if cfg.VISION_ENABLED:
+        if cfg.VISION_ENABLED or self.ai_tracking_active:
+            self.ai_tracking_active = False
             camera_quit()
             print("📷 摄像头和软件已关闭", flush=True)
 
